@@ -95,14 +95,14 @@ tests/
 ## Installation
 
 ```bash
-# Install from source with uv
+# Run directly from GitHub — no clone needed
+uvx --from git+https://github.com/billxc/easy-service.git easy-service --help
+
+# Or install as a uv tool (persistent, adds to PATH)
+uv tool install git+https://github.com/billxc/easy-service.git
+
+# Or install from a local clone
 uv pip install .
-
-# Or install in development mode
-uv pip install -e .
-
-# Or run directly without installing
-uv run easy-service --help
 ```
 
 ## Development
