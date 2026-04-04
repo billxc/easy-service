@@ -53,10 +53,17 @@ def build_spec(args) -> ServiceSpec:
     command = list(args.service_command)
     if command and command[0] == "--":
         command = command[1:]
+    if not command:
+        raise ValueError("no command provided (did you forget to add -- before the command?)")
+    cwd = args.cwd
+    if cwd is not None:
+        cwd = cwd.resolve()
+        if not cwd.is_dir():
+            raise ValueError(f"working directory does not exist: {cwd}")
     spec = ServiceSpec(
         name=args.name,
         command=tuple(command),
-        working_dir=args.cwd,
+        working_dir=cwd,
         env=parse_env_items(args.env),
         auto_start=not args.no_auto_start,
         keep_alive=not args.no_keep_alive,
@@ -112,12 +119,15 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "status":
             status = manager.status(args.name)
+            if not status.installed:
+                print(f"{args.name}: not installed")
+                return 1
             state = "running" if status.running else "stopped"
             if status.running is None:
                 state = "unknown"
-            print(f"installed={status.installed}")
-            print(f"running={state}")
-            print(status.detail)
+            print(f"{args.name}: {state}")
+            if status.detail:
+                print(status.detail)
             return 0
 
     except Exception as exc:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import subprocess
+import shutil
 from pathlib import Path
 
 from easy_service.models import ServiceSpec, ServiceStatus
@@ -29,6 +29,15 @@ class WindowsTaskSchedulerManager(ServiceManager):
 
     def _schtasks(self) -> str:
         return self._require_binary("schtasks")
+
+    def _require_installed(self, name: str) -> Path:
+        path = self.launcher_path(name)
+        if not path.exists():
+            raise RuntimeError(
+                f"service {name!r} is not installed (no launcher at {path})\n"
+                f"hint: run 'easy-service install {name} -- <command>' first"
+            )
+        return path
 
     def _launcher_content(self, spec: ServiceSpec) -> str:
         lines = ["@echo off"]
@@ -75,20 +84,20 @@ class WindowsTaskSchedulerManager(ServiceManager):
             self.start(spec.name)
 
     def uninstall(self, name: str) -> None:
+        self._require_installed(name)
         task_name = self.task_name(name)
         self._run([self._schtasks(), "/delete", "/tn", task_name, "/f"], check=False)
         app_dir = self.app_dir(name)
         if app_dir.exists():
-            for child in app_dir.iterdir():
-                if child.is_file():
-                    child.unlink()
-            app_dir.rmdir()
+            shutil.rmtree(app_dir)
 
     def start(self, name: str) -> None:
+        self._require_installed(name)
         self._run([self._schtasks(), "/run", "/tn", self.task_name(name)])
 
     def stop(self, name: str) -> None:
-        self._run([self._schtasks(), "/end", "/tn", self.task_name(name)], check=False)
+        self._require_installed(name)
+        self._run([self._schtasks(), "/end", "/tn", self.task_name(name)])
 
     def status(self, name: str) -> ServiceStatus:
         launcher = self.launcher_path(name)
@@ -98,13 +107,28 @@ class WindowsTaskSchedulerManager(ServiceManager):
             [self._schtasks(), "/query", "/tn", self.task_name(name), "/fo", "list"],
             check=False,
         )
+        if result.returncode != 0:
+            return ServiceStatus(
+                installed=True,
+                running=None,
+                detail="launcher exists but task not registered in Task Scheduler",
+            )
         running = "Running" in result.stdout
         detail = (result.stdout or result.stderr).strip() or "unknown"
-        return ServiceStatus(installed=result.returncode == 0, running=running, detail=detail)
+        return ServiceStatus(installed=True, running=running, detail=detail)
 
     def doctor(self) -> list[str]:
         lines = super().doctor()
         lines.append(f"app_dir={self.app_dir('example').parent}")
-        lines.append(f"schtasks={'yes' if self._require_binary('schtasks') else 'no'}")
+        try:
+            self._require_binary("schtasks")
+            lines.append("schtasks=yes")
+        except RuntimeError:
+            lines.append("schtasks=MISSING (required)")
+        try:
+            self._require_binary("powershell")
+            lines.append("powershell=yes")
+        except RuntimeError:
+            lines.append("powershell=MISSING (required)")
         return lines
 

@@ -18,6 +18,15 @@ class LinuxUserServiceManager(ServiceManager):
     def unit_path(self, name: str) -> Path:
         return Path.home() / ".config" / "systemd" / "user" / self.unit_name(name)
 
+    def _require_installed(self, name: str) -> Path:
+        path = self.unit_path(name)
+        if not path.exists():
+            raise RuntimeError(
+                f"service {name!r} is not installed (no unit at {path})\n"
+                f"hint: run 'easy-service install {name} -- <command>' first"
+            )
+        return path
+
     def render(self, spec: ServiceSpec) -> dict[Path, str]:
         spec.validate()
         lines = [
@@ -51,20 +60,21 @@ class LinuxUserServiceManager(ServiceManager):
 
     def uninstall(self, name: str) -> None:
         self._require_binary("systemctl")
+        self._require_installed(name)
         unit = self.unit_name(name)
         self._run(["systemctl", "--user", "stop", unit], check=False)
         self._run(["systemctl", "--user", "disable", unit], check=False)
-        path = self.unit_path(name)
-        if path.exists():
-            path.unlink()
+        self.unit_path(name).unlink()
         self._run(["systemctl", "--user", "daemon-reload"])
 
     def start(self, name: str) -> None:
         self._require_binary("systemctl")
+        self._require_installed(name)
         self._run(["systemctl", "--user", "start", self.unit_name(name)])
 
     def stop(self, name: str) -> None:
         self._require_binary("systemctl")
+        self._require_installed(name)
         self._run(["systemctl", "--user", "stop", self.unit_name(name)])
 
     def status(self, name: str) -> ServiceStatus:
@@ -83,7 +93,13 @@ class LinuxUserServiceManager(ServiceManager):
 
     def doctor(self) -> list[str]:
         lines = super().doctor()
-        lines.append(f"unit_dir={self.unit_path('example').parent}")
-        lines.append(f"systemctl={'yes' if self._require_binary('systemctl') else 'no'}")
+        unit_dir = self.unit_path("example").parent
+        lines.append(f"unit_dir={unit_dir}")
+        lines.append(f"unit_dir_exists={unit_dir.exists()}")
+        try:
+            self._require_binary("systemctl")
+            lines.append("systemctl=yes")
+        except RuntimeError:
+            lines.append("systemctl=MISSING (required)")
         return lines
 

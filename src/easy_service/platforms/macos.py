@@ -29,10 +29,19 @@ class MacOSLaunchAgentManager(ServiceManager):
     def _job(self, name: str) -> str:
         return f"{self._domain()}/{self.label(name)}"
 
+    def _require_installed(self, name: str) -> Path:
+        path = self.plist_path(name)
+        if not path.exists():
+            raise RuntimeError(
+                f"service {name!r} is not installed (no plist at {path})\n"
+                f"hint: run 'easy-service install {name} -- <command>' first"
+            )
+        return path
+
     def render(self, spec: ServiceSpec) -> dict[Path, str]:
         spec.validate()
         log_dir = self.log_dir()
-        plist = {
+        plist: dict = {
             "Label": self.label(spec.name),
             "ProgramArguments": list(spec.command),
             "RunAtLoad": spec.auto_start,
@@ -53,42 +62,56 @@ class MacOSLaunchAgentManager(ServiceManager):
         plist_path, content = next(iter(artifacts.items()))
         plist_path.parent.mkdir(parents=True, exist_ok=True)
         self.log_dir().mkdir(parents=True, exist_ok=True)
-        plist_path.write_text(content)
+        # Unload any previous version before overwriting
         self._run(["launchctl", "bootout", self._job(spec.name)], check=False)
+        plist_path.write_text(content)
         self._run(["launchctl", "bootstrap", self._domain(), str(plist_path)])
         if spec.auto_start:
             self._run(["launchctl", "kickstart", "-k", self._job(spec.name)])
 
     def uninstall(self, name: str) -> None:
         self._require_binary("launchctl")
+        self._require_installed(name)
         self._run(["launchctl", "bootout", self._job(name)], check=False)
         plist_path = self.plist_path(name)
-        if plist_path.exists():
-            plist_path.unlink()
+        plist_path.unlink()
 
     def start(self, name: str) -> None:
         self._require_binary("launchctl")
-        plist_path = self.plist_path(name)
+        plist_path = self._require_installed(name)
+        # Bootstrap loads the job into launchd (no-op if already loaded)
         self._run(["launchctl", "bootstrap", self._domain(), str(plist_path)], check=False)
         self._run(["launchctl", "kickstart", "-k", self._job(name)])
 
     def stop(self, name: str) -> None:
         self._require_binary("launchctl")
-        self._run(["launchctl", "bootout", self._job(name)], check=False)
+        self._require_installed(name)
+        # bootout unloads the job, which is necessary for KeepAlive services
+        # (a simple kill would cause launchd to respawn immediately)
+        self._run(["launchctl", "bootout", self._job(name)])
 
     def status(self, name: str) -> ServiceStatus:
         plist_path = self.plist_path(name)
         if not plist_path.exists():
             return ServiceStatus(installed=False, running=None, detail="plist not found")
         result = self._run(["launchctl", "print", self._job(name)], check=False)
-        running = result.returncode == 0
-        detail = (result.stderr or result.stdout).strip() or "unknown"
-        return ServiceStatus(installed=True, running=running, detail=detail)
+        if result.returncode != 0:
+            return ServiceStatus(installed=True, running=False, detail="loaded but not running")
+        output = result.stdout or ""
+        # launchctl print shows "state = running" or "state = not running"
+        running = "state = running" in output.lower()
+        return ServiceStatus(installed=True, running=running, detail=output.strip() or "loaded")
 
     def doctor(self) -> list[str]:
         lines = super().doctor()
-        lines.append(f"launch_agents_dir={self.plist_path('example').parent}")
+        plist_dir = self.plist_path("example").parent
+        lines.append(f"launch_agents_dir={plist_dir}")
+        lines.append(f"launch_agents_dir_exists={plist_dir.exists()}")
         lines.append(f"log_dir={self.log_dir()}")
-        lines.append(f"launchctl={'yes' if self._require_binary('launchctl') else 'no'}")
+        try:
+            self._require_binary("launchctl")
+            lines.append("launchctl=yes")
+        except RuntimeError:
+            lines.append("launchctl=MISSING (required)")
         return lines
 
