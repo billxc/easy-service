@@ -105,6 +105,66 @@ uv tool install git+https://github.com/billxc/easy-service.git
 uv pip install .
 ```
 
+## Programmatic Usage
+
+Other Python projects can add `easy-service` as a dependency and use it as a library:
+
+```bash
+uv add git+https://github.com/billxc/easy-service.git
+```
+
+### Basic: install and manage a service
+
+```python
+from easy_service import ServiceSpec, manager_for_platform
+
+spec = ServiceSpec(
+    name="my-bot",
+    command=["python", "-m", "my_bot"],
+    working_dir="~/code/my-bot",
+)
+
+manager = manager_for_platform()   # auto-detects macOS / Linux / Windows
+manager.install(spec)              # install + auto-start
+manager.status("my-bot")           # => ServiceStatus(installed=True, running=True, ...)
+manager.stop("my-bot")
+manager.uninstall("my-bot")
+```
+
+### Preview artifacts before installing
+
+```python
+spec = ServiceSpec(name="sync-loop", command=["python", "sync.py"])
+
+for path, content in manager_for_platform().render(spec).items():
+    print(f"# {path}")
+    print(content)
+```
+
+### With environment variables
+
+```python
+spec = ServiceSpec(
+    name="web-hook",
+    command=["python", "-m", "webhook_server"],
+    env={"PORT": "8080", "LOG_LEVEL": "info"},
+    keep_alive=True,
+)
+```
+
+### Render for a different platform
+
+```python
+from easy_service import ServiceSpec, manager_for_platform
+
+spec = ServiceSpec(name="my-bot", command=["python", "-m", "my_bot"])
+
+# Generate a systemd unit file on macOS for deployment to a Linux server
+linux = manager_for_platform("linux")
+for path, content in linux.render(spec).items():
+    path.name  # => "easy-service-my-bot.service"
+```
+
 ## Development
 
 ```bash
