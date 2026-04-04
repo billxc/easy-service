@@ -92,11 +92,27 @@ src/easy_service/
 tests/
 ```
 
-## Development
-
-Run the tests with:
+## Installation
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
+# Install from source with uv
+uv pip install .
+
+# Or install in development mode
+uv pip install -e .
+
+# Or run directly without installing
+uv run easy-service --help
+```
+
+## Development
+
+```bash
+# Sync the project
+uv sync
+
+# Run the tests
+uv run python -m unittest discover -s tests -p 'test_*.py'
+```
 ```
 
