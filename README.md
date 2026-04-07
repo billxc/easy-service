@@ -35,7 +35,7 @@ There are solid building blocks in the ecosystem, but there is still a gap:
 
 - macOS: `LaunchAgent` in `~/Library/LaunchAgents`
 - Linux: `systemd --user` unit in `~/.config/systemd/user`
-- Windows: current-user `Task Scheduler` task plus a local PowerShell runner script
+- Windows: current-user `Task Scheduler` task with a named launcher exe
 
 Those choices are deliberate. They are the native, user-level primitives that do not require administrator access in the normal case.
 
@@ -94,15 +94,17 @@ tests/
 
 ## Installation
 
-```bash
-# Run directly from GitHub — no clone needed
-uvx --from git+https://github.com/billxc/easy-service.git easy-service --help
+`easy-service` must be **installed** (not just run via `uvx`), because the Windows backend copies the installed exe to create per-service named processes.
 
-# Or install as a uv tool (persistent, adds to PATH)
+```bash
+# Install as a uv tool (persistent, adds to PATH)
 uv tool install git+https://github.com/billxc/easy-service.git
 
 # Or install from a local clone
 uv pip install .
+
+# After upgrading easy-service or Python, reinstall existing services:
+# easy-service install <name> -- <command>
 ```
 
 ## Programmatic Usage
