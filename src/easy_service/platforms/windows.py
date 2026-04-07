@@ -25,6 +25,9 @@ class WindowsTaskSchedulerManager(ServiceManager):
     def runner_path(self, name: str) -> Path:
         return self.app_dir(name) / "run.ps1"
 
+    def pid_path(self, name: str) -> Path:
+        return self.app_dir(name) / "pid"
+
     def _powershell(self) -> str:
         return self._require_binary("powershell")
 
@@ -58,127 +61,27 @@ class WindowsTaskSchedulerManager(ServiceManager):
             file_name = command0
             arguments = subprocess.list2cmdline(list(spec.command[1:]))
 
-        env_lines = [
-            f"$psi.EnvironmentVariables[{self._ps_quote(key)}] = {self._ps_quote(value)}"
-            for key, value in spec.env
-        ]
-        working_dir_line = (
-            f"$psi.WorkingDirectory = {self._ps_quote(str(spec.working_dir))}"
-            if spec.working_dir
-            else ""
-        )
+        pid_file = self.pid_path(spec.name)
 
         lines = [
-            "$ErrorActionPreference = 'Stop'",
-            "",
-            "Add-Type -TypeDefinition @\"",
-            "using System;",
-            "using System.Runtime.InteropServices;",
-            "",
-            "public static class EasyServiceNative {",
-            "    [StructLayout(LayoutKind.Sequential)]",
-            "    public struct JOBOBJECT_BASIC_LIMIT_INFORMATION {",
-            "        public long PerProcessUserTimeLimit;",
-            "        public long PerJobUserTimeLimit;",
-            "        public uint LimitFlags;",
-            "        public UIntPtr MinimumWorkingSetSize;",
-            "        public UIntPtr MaximumWorkingSetSize;",
-            "        public uint ActiveProcessLimit;",
-            "        public UIntPtr Affinity;",
-            "        public uint PriorityClass;",
-            "        public uint SchedulingClass;",
-            "    }",
-            "",
-            "    [StructLayout(LayoutKind.Sequential)]",
-            "    public struct IO_COUNTERS {",
-            "        public ulong ReadOperationCount;",
-            "        public ulong WriteOperationCount;",
-            "        public ulong OtherOperationCount;",
-            "        public ulong ReadTransferCount;",
-            "        public ulong WriteTransferCount;",
-            "        public ulong OtherTransferCount;",
-            "    }",
-            "",
-            "    [StructLayout(LayoutKind.Sequential)]",
-            "    public struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION {",
-            "        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;",
-            "        public IO_COUNTERS IoInfo;",
-            "        public UIntPtr ProcessMemoryLimit;",
-            "        public UIntPtr JobMemoryLimit;",
-            "        public UIntPtr PeakProcessMemoryUsed;",
-            "        public UIntPtr PeakJobMemoryUsed;",
-            "    }",
-            "",
-            "    public const int JobObjectExtendedLimitInformation = 9;",
-            "    public const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;",
-            "",
-            "    [DllImport(\"kernel32.dll\", CharSet = CharSet.Unicode, SetLastError = true)]",
-            "    public static extern IntPtr CreateJobObject(IntPtr lpJobAttributes, string lpName);",
-            "",
-            "    [DllImport(\"kernel32.dll\", SetLastError = true)]",
-            "    public static extern bool SetInformationJobObject(IntPtr hJob, int jobObjectInfoClass, IntPtr lpJobObjectInfo, uint cbJobObjectInfoLength);",
-            "",
-            "    [DllImport(\"kernel32.dll\", SetLastError = true)]",
-            "    public static extern bool AssignProcessToJobObject(IntPtr hJob, IntPtr hProcess);",
-            "",
-            "    [DllImport(\"kernel32.dll\", SetLastError = true)]",
-            "    public static extern bool CloseHandle(IntPtr hObject);",
-            "}",
-            "\"@",
-            "",
-            "function New-EasyServiceJobObject {",
-            "    $job = [EasyServiceNative]::CreateJobObject([IntPtr]::Zero, $null)",
-            "    if ($job -eq [IntPtr]::Zero) {",
-            "        throw [System.ComponentModel.Win32Exception]::new([Runtime.InteropServices.Marshal]::GetLastWin32Error())",
-            "    }",
-            "",
-            "    $info = New-Object EasyServiceNative+JOBOBJECT_EXTENDED_LIMIT_INFORMATION",
-            "    $info.BasicLimitInformation.LimitFlags = [EasyServiceNative]::JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE",
-            "    $length = [Runtime.InteropServices.Marshal]::SizeOf([type] [EasyServiceNative+JOBOBJECT_EXTENDED_LIMIT_INFORMATION])",
-            "    $ptr = [Runtime.InteropServices.Marshal]::AllocHGlobal($length)",
-            "    try {",
-            "        [Runtime.InteropServices.Marshal]::StructureToPtr($info, $ptr, $false)",
-            "        if (-not [EasyServiceNative]::SetInformationJobObject($job, [EasyServiceNative]::JobObjectExtendedLimitInformation, $ptr, [uint32]$length)) {",
-            "            throw [System.ComponentModel.Win32Exception]::new([Runtime.InteropServices.Marshal]::GetLastWin32Error())",
-            "        }",
-            "    } finally {",
-            "        [Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)",
-            "    }",
-            "",
-            "    return $job",
-            "}",
-            "",
             "$psi = New-Object System.Diagnostics.ProcessStartInfo",
             f"$psi.FileName = {self._ps_quote(file_name)}",
             f"$psi.Arguments = {self._ps_quote(arguments)}",
             "$psi.UseShellExecute = $false",
         ]
-        if working_dir_line:
-            lines.append(working_dir_line)
-        lines.extend(env_lines)
+        if spec.working_dir:
+            lines.append(
+                f"$psi.WorkingDirectory = {self._ps_quote(str(spec.working_dir))}"
+            )
+        for key, value in spec.env:
+            lines.append(
+                f"$psi.EnvironmentVariables[{self._ps_quote(key)}] = {self._ps_quote(value)}"
+            )
         lines.extend(
             [
                 "",
-                "$job = New-EasyServiceJobObject",
-                "$process = $null",
-                "try {",
-                "    $process = [System.Diagnostics.Process]::Start($psi)",
-                "    if ($null -eq $process) {",
-                "        throw 'failed to start process'",
-                "    }",
-                "    if (-not [EasyServiceNative]::AssignProcessToJobObject($job, $process.Handle)) {",
-                "        throw [System.ComponentModel.Win32Exception]::new([Runtime.InteropServices.Marshal]::GetLastWin32Error())",
-                "    }",
-                "    $process.WaitForExit()",
-                "    exit $process.ExitCode",
-                "} finally {",
-                "    if ($process -ne $null) {",
-                "        $process.Dispose()",
-                "    }",
-                "    if ($job -ne [IntPtr]::Zero) {",
-                "        [EasyServiceNative]::CloseHandle($job) | Out-Null",
-                "    }",
-                "}",
+                "$process = [System.Diagnostics.Process]::Start($psi)",
+                f"$process.Id | Out-File -FilePath {self._ps_quote(str(pid_file))} -Encoding ascii -NoNewline",
                 "",
             ]
         )
@@ -203,7 +106,6 @@ class WindowsTaskSchedulerManager(ServiceManager):
         spec.validate()
         return {
             self.runner_path(spec.name): self._runner_content(spec),
-            self.app_dir(spec.name) / "register-task.ps1": self._registration_script(spec),
         }
 
     def install(self, spec: ServiceSpec) -> None:
@@ -212,8 +114,8 @@ class WindowsTaskSchedulerManager(ServiceManager):
         for path, content in artifacts.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
-        script = artifacts[self.app_dir(spec.name) / "register-task.ps1"]
-        self._run([self._powershell(), "-NoProfile", "-Command", script])
+        self._run([self._powershell(), "-NoProfile", "-Command",
+                   self._registration_script(spec)])
         if spec.auto_start:
             self.start(spec.name)
 
@@ -231,25 +133,38 @@ class WindowsTaskSchedulerManager(ServiceManager):
 
     def stop(self, name: str) -> None:
         self._require_installed(name)
-        self._run([self._schtasks(), "/end", "/tn", self.task_name(name)])
+        pid_file = self.pid_path(name)
+        if not pid_file.exists():
+            raise RuntimeError(f"service {name!r} is not running (no pid file)")
+        pid = int(pid_file.read_text().strip())
+        self._run(
+            [self._powershell(), "-NoProfile", "-Command",
+             f"Stop-Process -Id {pid} -Force"],
+            check=False,
+        )
+        pid_file.unlink(missing_ok=True)
 
     def status(self, name: str) -> ServiceStatus:
         runner = self.runner_path(name)
         if not runner.exists():
-            return ServiceStatus(installed=False, running=None, detail="runner not found")
-        result = self._run(
-            [self._schtasks(), "/query", "/tn", self.task_name(name), "/fo", "list"],
-            check=False,
-        )
-        if result.returncode != 0:
-            return ServiceStatus(
-                installed=True,
-                running=None,
-                detail="runner exists but task not registered in Task Scheduler",
+            return ServiceStatus(installed=False, running=None, detail="not installed")
+        pid_file = self.pid_path(name)
+        if not pid_file.exists():
+            return ServiceStatus(installed=True, running=False, detail="stopped (no pid file)")
+        try:
+            pid = int(pid_file.read_text().strip())
+            result = self._run(
+                [self._powershell(), "-NoProfile", "-Command",
+                 f"Get-Process -Id {pid} -ErrorAction Stop"],
+                check=False,
             )
-        running = "Running" in result.stdout
-        detail = (result.stdout or result.stderr).strip() or "unknown"
-        return ServiceStatus(installed=True, running=running, detail=detail)
+            if result.returncode == 0:
+                return ServiceStatus(installed=True, running=True, detail=f"running (pid {pid})")
+            # Process gone, clean up stale pid file
+            pid_file.unlink(missing_ok=True)
+            return ServiceStatus(installed=True, running=False, detail="stopped")
+        except (ValueError, OSError):
+            return ServiceStatus(installed=True, running=None, detail="invalid pid file")
 
     def doctor(self) -> list[str]:
         lines = super().doctor()

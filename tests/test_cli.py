@@ -195,45 +195,37 @@ class WindowsRenderTests(unittest.TestCase):
     def setUp(self) -> None:
         self.mgr = WindowsTaskSchedulerManager()
 
-    def test_artifacts_contain_launcher_and_script(self) -> None:
+    def test_render_produces_single_artifact(self) -> None:
         artifacts = self.mgr.render(_make_spec())
         names = {p.name for p in artifacts}
-        self.assertIn("run.ps1", names)
-        self.assertIn("register-task.ps1", names)
+        self.assertEqual(names, {"run.ps1"})
 
     def test_runner_contains_command(self) -> None:
         artifacts = self.mgr.render(_make_spec())
-        runner = [v for p, v in artifacts.items() if p.name == "run.ps1"][0]
+        runner = next(iter(artifacts.values()))
         self.assertIn("$psi.FileName = 'python'", runner)
 
     def test_runner_sets_cwd(self) -> None:
         spec = _make_spec(working_dir=Path("C:/app"))
-        artifacts = self.mgr.render(spec)
-        runner = [v for p, v in artifacts.items() if p.name == "run.ps1"][0]
+        runner = next(iter(self.mgr.render(spec).values()))
         self.assertIn("$psi.WorkingDirectory = 'C:\\app'", runner)
 
     def test_runner_sets_env(self) -> None:
         spec = _make_spec(env=(("KEY", "val"),))
-        artifacts = self.mgr.render(spec)
-        runner = [v for p, v in artifacts.items() if p.name == "run.ps1"][0]
+        runner = next(iter(self.mgr.render(spec).values()))
         self.assertIn("$psi.EnvironmentVariables['KEY'] = 'val'", runner)
 
-    def test_ps1_script_contains_task_name(self) -> None:
-        artifacts = self.mgr.render(_make_spec("my-svc"))
-        ps1 = [v for p, v in artifacts.items() if p.name == "register-task.ps1"][0]
-        self.assertIn("EasyService-my-svc", ps1)
+    def test_registration_script_contains_task_name(self) -> None:
+        mgr = WindowsTaskSchedulerManager()
+        script = mgr._registration_script(_make_spec("my-svc"))
+        self.assertIn("EasyService-my-svc", script)
+        self.assertIn("powershell", script)
+        self.assertIn("run.ps1", script)
 
-    def test_ps1_script_executes_runner_via_powershell(self) -> None:
-        artifacts = self.mgr.render(_make_spec("my-svc"))
-        ps1 = [v for p, v in artifacts.items() if p.name == "register-task.ps1"][0]
-        self.assertIn("powershell", ps1)
-        self.assertIn("run.ps1", ps1)
-
-    def test_runner_binds_child_process_to_job(self) -> None:
-        artifacts = self.mgr.render(_make_spec("my-svc"))
-        runner = [v for p, v in artifacts.items() if p.name == "run.ps1"][0]
-        self.assertIn("AssignProcessToJobObject", runner)
-        self.assertIn("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE", runner)
+    def test_runner_writes_pid_file(self) -> None:
+        runner = next(iter(self.mgr.render(_make_spec("my-svc")).values()))
+        self.assertIn("Out-File", runner)
+        self.assertIn("pid", runner)
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +305,7 @@ class CLITests(unittest.TestCase):
         with redirect_stdout(stdout):
             code = main(argv)
         self.assertEqual(code, 0)
-        self.assertIn("launcher.cmd", stdout.getvalue())
+        self.assertIn("run.ps1", stdout.getvalue())
 
     def test_status_not_installed_returns_1(self) -> None:
         stdout = io.StringIO()

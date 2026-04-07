@@ -25,7 +25,7 @@ That becomes a platform-specific artifact:
 
 - macOS: a `plist`
 - Linux: a `systemd --user` unit
-- Windows: a launcher script plus a current-user scheduled task
+- Windows: a PowerShell runner script plus a current-user scheduled task
 
 ## CLI Contract
 
@@ -70,7 +70,7 @@ The public CLI surface is intentionally small:
 
 ### Windows
 
-- Artifact path: `%LOCALAPPDATA%\\easy-service\\<name>\\launcher.cmd`
+- Artifact path: `%LOCALAPPDATA%\\easy-service\\<name>\\run.ps1`
 - Registration style: current-user scheduled task
 - Launch style: trigger on logon plus manual `schtasks /run`
 - Restart behavior: task registration is user-scoped, not a system service

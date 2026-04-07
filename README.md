@@ -35,7 +35,7 @@ There are solid building blocks in the ecosystem, but there is still a gap:
 
 - macOS: `LaunchAgent` in `~/Library/LaunchAgents`
 - Linux: `systemd --user` unit in `~/.config/systemd/user`
-- Windows: current-user `Task Scheduler` task plus a local launcher script
+- Windows: current-user `Task Scheduler` task plus a local PowerShell runner script
 
 Those choices are deliberate. They are the native, user-level primitives that do not require administrator access in the normal case.
 
