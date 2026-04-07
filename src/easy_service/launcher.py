@@ -155,14 +155,24 @@ def launch(name: str, app_dir: Path) -> int:
             start_time = time.monotonic()
             _log(f"starting child: {command}")
             output_file = open(output_path, "a")
-            proc = subprocess.Popen(
-                command,
-                cwd=working_dir,
-                env=child_env,
-                stdout=output_file,
-                stderr=subprocess.STDOUT,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
+            try:
+                proc = subprocess.Popen(
+                    command,
+                    cwd=working_dir,
+                    env=child_env,
+                    stdout=output_file,
+                    stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                )
+            except Exception as e:
+                output_file.close()
+                _log(f"failed to start child: {e}")
+                if not keep_alive:
+                    return 1
+                backoff = min(backoff * 2, max_backoff)
+                _log(f"retrying in {backoff}s")
+                time.sleep(backoff)
+                continue
             if job and hasattr(proc, '_handle'):
                 kernel32.AssignProcessToJobObject(job, int(proc._handle))
             _log(f"child started, pid={proc.pid}")
