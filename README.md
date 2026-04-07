@@ -39,6 +39,26 @@ There are solid building blocks in the ecosystem, but there is still a gap:
 
 Those choices are deliberate. They are the native, user-level primitives that do not require administrator access in the normal case.
 
+### Why Windows needs extra work
+
+macOS `launchd` and Linux `systemd` are full-featured service managers — they handle process supervision, auto-restart (`KeepAlive` / `Restart=on-failure`), log collection, and clean process lifecycle out of the box.
+
+Windows Task Scheduler is not a service manager. It can launch a process, but it has no built-in support for:
+
+- **Process supervision**: no automatic restart when a process crashes
+- **Process grouping**: "End Task" in Task Scheduler only kills the top-level process, not child processes
+- **Log management**: no stdout/stderr capture
+
+`easy-service` fills these gaps with a **launcher daemon** that wraps the user's command:
+
+- Automatic restart with exponential backoff (1s → 2s → 4s → ... → 60s max, reset after 60s of stable running)
+- Windows Job Object with `KILL_ON_JOB_CLOSE` to ensure the entire process tree is killed together
+- stdout/stderr redirection to log files, viewable via `easy-service logs`
+
+**Why copy the exe?** The launcher daemon is a long-running process. If `easy-service` itself is the running process, `uv tool install --force` would fail with "access denied" because Windows locks running executables. By copying `easy-service.exe` into each service's data directory (as `EasyService-<name>.exe`), the original exe is free to be upgraded at any time. As a bonus, each service shows with a distinct name in Task Manager.
+
+The copied exe is a uv trampoline — a thin shim (~47 KB) that embeds a pointer to the tool's Python virtualenv. The venv path is deterministic (`%APPDATA%/uv/tools/easy-service/Scripts/python.exe`), so upgrading `easy-service` or `uv` does not invalidate existing copies.
+
 ## Differentiation
 
 - User-level first, not system-level first
@@ -94,8 +114,6 @@ tests/
 
 ## Installation
 
-`easy-service` must be **installed** (not just run via `uvx`), because the Windows backend copies the installed exe to create per-service named processes.
-
 ```bash
 # Install as a uv tool (persistent, adds to PATH)
 uv tool install git+https://github.com/billxc/easy-service.git
@@ -103,6 +121,8 @@ uv tool install git+https://github.com/billxc/easy-service.git
 # Or install from a local clone
 uv pip install .
 ```
+
+> **Note:** On Windows, `easy-service` must be installed persistently (not run via `uvx`), because the launcher daemon needs a stable exe to copy.
 
 ## Programmatic Usage
 
