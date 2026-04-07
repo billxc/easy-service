@@ -12,8 +12,13 @@ from easy_service.utils import parse_env_items
 
 
 def _get_version() -> str:
-    from easy_service._version import version_string
-    return version_string()
+    from importlib.metadata import version
+    v = version("easy-service")
+    try:
+        from easy_service._build_meta import COMMIT
+        return f"easy-service {v} (commit: {COMMIT})"
+    except Exception:
+        return f"easy-service {v}"
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -6,3 +6,4 @@ __pycache__/
 dist/
 build/
 .harness/
+src/easy_service/_build_meta.py

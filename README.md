@@ -9,11 +9,7 @@
 ## Installation
 
 ```bash
-# Install as a uv tool (persistent, adds to PATH)
 uv tool install git+https://github.com/billxc/easy-service.git
-
-# Or install from a local clone
-uv pip install .
 ```
 
 > **Note:** On Windows, `easy-service` must be installed persistently (not run via `uvx`), because the launcher daemon needs a stable exe to copy.
