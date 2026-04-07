@@ -30,9 +30,8 @@ class WindowsTaskSchedulerManager(ServiceManager):
     def pid_path(self, name: str) -> Path:
         return self.app_dir(name) / "pid"
 
-    def _base_python(self) -> str:
-        """Return base Python interpreter path (outside uv tool venv)."""
-        return getattr(sys, '_base_executable', sys.executable)
+    def _uv_bin(self) -> str:
+        return self._require_binary("uv")
 
     def _launcher_script(self, name: str) -> Path:
         return self.app_dir(name) / "launcher.py"
@@ -72,13 +71,13 @@ class WindowsTaskSchedulerManager(ServiceManager):
         return json.dumps(data, indent=2)
 
     def _registration_script(self, spec: ServiceSpec) -> str:
-        python = self._base_python()
+        uv = self._uv_bin()
         launcher = self._launcher_script(spec.name)
         app_dir = self.app_dir(spec.name)
         task_name = self.task_name(spec.name)
         return (
-            f"$action = New-ScheduledTaskAction -Execute '{python}' "
-            f"-Argument '{launcher} {spec.name} {app_dir}'; "
+            f"$action = New-ScheduledTaskAction -Execute '{uv}' "
+            f"-Argument 'run --no-project {launcher} {spec.name} {app_dir}'; "
             "$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; "
             "$settings = New-ScheduledTaskSettingsSet "
             "-AllowStartIfOnBatteries "
@@ -128,11 +127,11 @@ class WindowsTaskSchedulerManager(ServiceManager):
 
     def start(self, name: str) -> None:
         self._require_installed(name)
-        python = self._base_python()
+        uv = self._uv_bin()
         launcher = self._launcher_script(name)
         app_dir = self.app_dir(name)
         subprocess.Popen(
-            [python, str(launcher), name, str(app_dir)],
+            [uv, "run", "--no-project", str(launcher), name, str(app_dir)],
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
