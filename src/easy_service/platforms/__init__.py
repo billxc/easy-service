@@ -29,5 +29,4 @@ def manager_for_platform(name: str | None = None) -> ServiceManager:
     if platform_name == "windows":
         return WindowsTaskSchedulerManager()
     raise ValueError(f"unknown platform: {platform_name!r}")
-    raise RuntimeError(f"unsupported platform: {platform_name}")
 

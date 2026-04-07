@@ -2,13 +2,67 @@
 
 `easy-service` makes a command feel like a service on macOS, Linux, and Windows without asking for administrator privileges.
 
-The product thesis is narrow on purpose:
-
 - Cross-platform by default
 - No admin by default
 - Simple UX by default
 
-This repository is the initial scaffold for that idea. It includes the product framing, the architecture choices, and a small Python CLI/package skeleton that can render and install user-level services using the native service manager on each platform.
+## Installation
+
+```bash
+# Install as a uv tool (persistent, adds to PATH)
+uv tool install git+https://github.com/billxc/easy-service.git
+
+# Or install from a local clone
+uv pip install .
+```
+
+> **Note:** On Windows, `easy-service` must be installed persistently (not run via `uvx`), because the launcher daemon needs a stable exe to copy.
+
+## Quick Start
+
+```bash
+# Install a service (starts automatically)
+easy-service install my-bot --cwd ~/code/my-bot -- python -m my_bot
+
+# Check status
+easy-service status my-bot
+
+# View service output
+easy-service logs my-bot
+easy-service logs my-bot --follow   # tail -f style
+
+# Stop and restart
+easy-service stop my-bot
+easy-service start my-bot
+
+# Remove
+easy-service uninstall my-bot
+```
+
+## CLI
+
+```bash
+easy-service doctor                                                 # check platform prerequisites
+easy-service render my-bot --cwd ~/code/my-bot -- python -m my_bot  # preview artifacts
+easy-service install my-bot --cwd ~/code/my-bot -- python -m my_bot # install + auto-start
+easy-service start my-bot
+easy-service stop my-bot
+easy-service restart my-bot
+easy-service status my-bot
+easy-service uninstall my-bot
+easy-service logs my-bot [-f/--follow]                              # view service stdout/stderr
+easy-service events my-bot [-f/--follow]                            # view launcher lifecycle events
+```
+
+### Options
+
+`render` and `install` accept these flags:
+
+- `--cwd <path>` — working directory for the service
+- `--env KEY=VALUE` — environment variable (repeatable)
+- `--no-auto-start` — install without starting immediately
+- `--no-keep-alive` — do not auto-restart on exit
+- `--platform <name>` — override platform detection (e.g., generate Linux artifacts on macOS)
 
 ## Positioning
 
@@ -51,7 +105,7 @@ Windows Task Scheduler is not a service manager. It can launch a process, but it
 
 `easy-service` fills these gaps with a **launcher daemon** that wraps the user's command:
 
-- Automatic restart with exponential backoff (1s → 2s → 4s → ... → 60s max, reset after 60s of stable running)
+- Automatic restart with exponential backoff (2s -> 4s -> 8s -> ... -> 60s max, reset after 60s of stable running)
 - Windows Job Object with `KILL_ON_JOB_CLOSE` to ensure the entire process tree is killed together
 - stdout/stderr redirection to log files, viewable via `easy-service logs`
 
@@ -62,9 +116,9 @@ The copied exe is a uv trampoline — a thin shim (~47 KB) that embeds a pointer
 ## Differentiation
 
 - User-level first, not system-level first
-- One mental model across platforms: `install`, `start`, `stop`, `restart`, `status`, `render`
+- One mental model across platforms: `install`, `start`, `stop`, `restart`, `status`, `logs`
 - Plain-text artifacts you can inspect before installing
-- Native platform integration instead of a long-running wrapper daemon
+- Native platform integration (macOS/Linux); thin launcher daemon where native gaps exist (Windows)
 - Minimal configuration surface
 
 ## Non-Goals
@@ -73,56 +127,6 @@ The copied exe is a uv trampoline — a thin shim (~47 KB) that embeds a pointer
 - Admin-only installation flows
 - Container orchestration
 - Remote fleet management
-- Hidden background daemons that manage other daemons
-
-## Current Scaffold
-
-The first commit is intentionally small but concrete:
-
-- Product and architecture docs
-- A Python package with a cross-platform CLI shape
-- Platform backends for rendering and user-level install/start/stop/status flows
-- Basic unit tests for naming and manifest generation
-
-## Planned CLI
-
-```bash
-easy-service doctor
-easy-service render my-bot --cwd ~/code/my-bot -- python -m my_bot
-easy-service install my-bot --cwd ~/code/my-bot -- python -m my_bot
-easy-service start my-bot
-easy-service stop my-bot
-easy-service restart my-bot
-easy-service status my-bot
-easy-service uninstall my-bot
-```
-
-## Repository Layout
-
-```text
-docs/
-  architecture.md
-  market-scan.md
-  roadmap.md
-src/easy_service/
-  cli.py
-  models.py
-  utils.py
-  platforms/
-tests/
-```
-
-## Installation
-
-```bash
-# Install as a uv tool (persistent, adds to PATH)
-uv tool install git+https://github.com/billxc/easy-service.git
-
-# Or install from a local clone
-uv pip install .
-```
-
-> **Note:** On Windows, `easy-service` must be installed persistently (not run via `uvx`), because the launcher daemon needs a stable exe to copy.
 
 ## Programmatic Usage
 
@@ -193,5 +197,3 @@ uv sync
 # Run the tests
 uv run python -m unittest discover -s tests -p 'test_*.py'
 ```
-```
-
