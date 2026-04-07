@@ -12,8 +12,8 @@ from easy_service.utils import parse_env_items
 
 
 def _get_version() -> str:
-    from importlib.metadata import version
-    return version("easy-service")
+    from easy_service._version import version_string
+    return version_string()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,7 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-V", "--version", action="version",
-        version=f"%(prog)s {_get_version()}",
+        version=_get_version(),
     )
     sub = parser.add_subparsers(dest="command")
 
