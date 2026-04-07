@@ -120,7 +120,9 @@ class WindowsTaskSchedulerManager(ServiceManager):
 
     def start(self, name: str) -> None:
         self._require_installed(name)
-        self._run([self._schtasks(), "/run", "/tn", self.task_name(name)])
+        runner = self.runner_path(name)
+        self._run([self._powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
+                   "-File", str(runner)])
 
     def _read_pid(self, name: str) -> int | None:
         """Read PID from pid file; return None if stale or missing."""
