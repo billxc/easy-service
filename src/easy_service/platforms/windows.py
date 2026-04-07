@@ -29,9 +29,6 @@ class WindowsTaskSchedulerManager(ServiceManager):
     def pid_path(self, name: str) -> Path:
         return self.app_dir(name) / "pid"
 
-    def _uv_bin(self) -> str:
-        return self._require_binary("uv")
-
     def _service_exe(self, name: str) -> Path:
         """Copy easy-service.exe to a named exe so it shows in Task Manager."""
         src = Path(self._easy_service_bin())
