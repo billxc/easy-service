@@ -30,11 +30,26 @@ class WindowsTaskSchedulerManager(ServiceManager):
         return self.app_dir(name) / "pid"
 
     def _service_exe(self, name: str) -> Path:
-        """Copy easy-service.exe to a named exe so it shows in Task Manager."""
-        src = Path(self._easy_service_bin())
-        dst = self.app_dir(name) / f"{self.task_name(name)}.exe"
-        shutil.copy2(src, dst)
-        return dst
+        """Copy the tool venv and rename python.exe for Task Manager identification.
+
+        python.exe uses pyvenv.cfg (relative lookup), so the copy is fully
+        isolated from the original venv — no file locking on upgrade.
+        """
+        src_venv = Path(sys.executable).parent.parent
+        dst_venv = self.app_dir(name) / "venv"
+        if dst_venv.exists():
+            shutil.rmtree(dst_venv)
+        shutil.copytree(src_venv, dst_venv)
+        scripts = dst_venv / "Scripts"
+        # Keep only pythonw.exe (windowless, no console); remove everything else
+        for f in scripts.iterdir():
+            if f.name.lower() != "pythonw.exe":
+                f.unlink()
+        # Rename pythonw.exe for Task Manager identification
+        src_exe = scripts / "pythonw.exe"
+        dst_exe = scripts / f"{self.task_name(name)}.exe"
+        src_exe.rename(dst_exe)
+        return dst_exe
 
     def _easy_service_bin(self) -> str:
         return self._require_binary("easy-service")
@@ -68,7 +83,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
         task_name = self.task_name(spec.name)
         return (
             f"$action = New-ScheduledTaskAction -Execute '{exe}' "
-            f"-Argument '_launch {spec.name}'; "
+            f"-Argument '-m easy_service _launch {spec.name}'; "
             "$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; "
             "$settings = New-ScheduledTaskSettingsSet "
             "-AllowStartIfOnBatteries "
@@ -119,6 +134,16 @@ class WindowsTaskSchedulerManager(ServiceManager):
         self._require_installed(name)
         task_name = self.task_name(name)
         self._run([self._schtasks(), "/run", "/tn", task_name])
+
+    def upgrade(self, name: str) -> None:
+        """Re-copy the tool venv to pick up Python or easy-service upgrades."""
+        self._require_installed(name)
+        was_running = self._read_pid(name) is not None
+        if was_running:
+            self.stop(name)
+        self._service_exe(name)
+        if was_running:
+            self.start(name)
 
     def _read_pid(self, name: str) -> int | None:
         """Read PID from pid file; return None if stale or missing."""

@@ -13,6 +13,7 @@ import ctypes
 import ctypes.wintypes as wintypes
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -142,6 +143,15 @@ def launch(name: str, app_dir: Path) -> int:
     max_backoff = 60
     stable_threshold = 60  # seconds
 
+    # On Windows, .cmd/.bat scripts (e.g. npx, npm) need shell=True so
+    # cmd.exe resolves them.  Detect this by checking whether the first
+    # element of the command resolves to a .cmd or .bat file.
+    use_shell = False
+    if isinstance(command, list) and command:
+        exe = shutil.which(command[0])
+        if exe and exe.lower().endswith((".cmd", ".bat")):
+            use_shell = True
+
     _log(f"launcher started, pid={os.getpid()}, keep_alive={keep_alive}")
 
     # Create Job Object — when launcher dies, all children are killed
@@ -153,7 +163,7 @@ def launch(name: str, app_dir: Path) -> int:
     try:
         while True:
             start_time = time.monotonic()
-            _log(f"starting child: {command}")
+            _log(f"starting child: {command} (shell={use_shell})")
             output_file = open(output_path, "a")
             try:
                 proc = subprocess.Popen(
@@ -163,6 +173,7 @@ def launch(name: str, app_dir: Path) -> int:
                     stdout=output_file,
                     stderr=subprocess.STDOUT,
                     creationflags=subprocess.CREATE_NO_WINDOW,
+                    shell=use_shell,
                 )
             except Exception as e:
                 output_file.close()
@@ -173,8 +184,11 @@ def launch(name: str, app_dir: Path) -> int:
                 _log(f"retrying in {backoff}s")
                 time.sleep(backoff)
                 continue
-            if job and hasattr(proc, '_handle'):
-                kernel32.AssignProcessToJobObject(job, int(proc._handle))
+            try:
+                if job and hasattr(proc, '_handle'):
+                    kernel32.AssignProcessToJobObject(job, int(proc._handle))
+            except OSError as e:
+                _log(f"warning: AssignProcessToJobObject failed: {e}")
             _log(f"child started, pid={proc.pid}")
             try:
                 proc.wait()

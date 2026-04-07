@@ -11,12 +11,21 @@ from easy_service.platforms import manager_for_platform
 from easy_service.utils import parse_env_items
 
 
+def _get_version() -> str:
+    from importlib.metadata import version
+    return version("easy-service")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="easy-service",
         description="Cross-platform, no-admin service management for user-level commands.",
     )
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument(
+        "-V", "--version", action="version",
+        version=f"%(prog)s {_get_version()}",
+    )
+    sub = parser.add_subparsers(dest="command")
 
     doctor = sub.add_parser("doctor", help="Show backend and install locations")
     doctor.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
@@ -29,6 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
         cmd = sub.add_parser(name, help=f"{name.capitalize()} a service")
         cmd.add_argument("name")
         cmd.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
+
+    upgrade = sub.add_parser("upgrade", help="Re-sync service runtime (Windows only)")
+    upgrade.add_argument("name")
+    upgrade.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
 
     logs = sub.add_parser("logs", help="Show service output (stdout/stderr)")
     logs.add_argument("name")
@@ -90,6 +103,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if not args.command:
+        parser.print_help()
+        return 2
+
     try:
         manager = manager_for_platform(getattr(args, "platform", None))
         if args.command == "doctor":
@@ -120,6 +137,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "uninstall":
             manager.uninstall(args.name)
             print(f"uninstalled {args.name}")
+            return 0
+
+        if args.command == "upgrade":
+            if not hasattr(manager, "upgrade"):
+                print(f"error: upgrade is not supported on {manager.platform_name}", file=sys.stderr)
+                return 1
+            manager.upgrade(args.name)
+            print(f"upgraded {args.name}")
             return 0
 
         if args.command == "start":
