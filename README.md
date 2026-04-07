@@ -43,6 +43,7 @@ easy-service uninstall my-bot
 
 ```bash
 easy-service doctor                                                 # check platform prerequisites
+easy-service list                                                   # list installed services
 easy-service render my-bot --cwd ~/code/my-bot -- python -m my_bot  # preview artifacts
 easy-service install my-bot --cwd ~/code/my-bot -- python -m my_bot # install + auto-start
 easy-service start my-bot
@@ -52,6 +53,8 @@ easy-service status my-bot
 easy-service uninstall my-bot
 easy-service logs my-bot [-f/--follow]                              # view service stdout/stderr
 easy-service events my-bot [-f/--follow]                            # view launcher lifecycle events
+easy-service upgrade [my-bot]                                       # re-sync service runtime (Windows)
+easy-service --version                                              # show version
 ```
 
 ### Options
@@ -108,10 +111,13 @@ Windows Task Scheduler is not a service manager. It can launch a process, but it
 - Automatic restart with exponential backoff (2s -> 4s -> 8s -> ... -> 60s max, reset after 60s of stable running)
 - Windows Job Object with `KILL_ON_JOB_CLOSE` to ensure the entire process tree is killed together
 - stdout/stderr redirection to log files, viewable via `easy-service logs`
+- Automatic detection of `.cmd`/`.bat` commands (e.g. `npx`, `npm`) — runs them through `cmd.exe` so Windows resolves them correctly
 
-**Why copy the exe?** The launcher daemon is a long-running process. If `easy-service` itself is the running process, `uv tool install --force` would fail with "access denied" because Windows locks running executables. By copying `easy-service.exe` into each service's data directory (as `EasyService-<name>.exe`), the original exe is free to be upgraded at any time. As a bonus, each service shows with a distinct name in Task Manager.
+**Why copy the venv?** The launcher daemon is a long-running process. If `easy-service` runs directly from the tool virtualenv, `uv tool install --force` would fail with "access denied" because Windows locks running executables and loaded DLLs. By copying the tool's virtualenv into each service's data directory, the original installation is free to be upgraded at any time. The copied `pythonw.exe` is renamed to `EasyService-<name>.exe` so each service shows with a distinct name in Task Manager, and `pythonw.exe` (instead of `python.exe`) ensures no console window appears.
 
-The copied exe is a uv trampoline — a thin shim (~47 KB) that embeds a pointer to the tool's Python virtualenv. The venv path is deterministic (`%APPDATA%/uv/tools/easy-service/Scripts/python.exe`), so upgrading `easy-service` or `uv` does not invalidate existing copies.
+The copied venv's `pyvenv.cfg` points to uv's managed Python installation (e.g. `%APPDATA%/uv/python/cpython-3.13-...`). If uv upgrades Python, run `easy-service upgrade` to re-sync all services.
+
+**Why `upgrade`?** The `upgrade` command re-copies the tool venv and re-registers the Task Scheduler task for each service. This picks up both Python version changes (updated `pyvenv.cfg`) and `easy-service` code changes (updated `site-packages`). Run it after `uv tool install --force easy-service` or after uv upgrades Python.
 
 ## Differentiation
 
