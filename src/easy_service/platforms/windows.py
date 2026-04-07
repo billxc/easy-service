@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from easy_service.models import ServiceSpec, ServiceStatus
@@ -150,6 +151,28 @@ class WindowsTaskSchedulerManager(ServiceManager):
         if pid is not None:
             return ServiceStatus(installed=True, running=True, detail=f"running (pid {pid})")
         return ServiceStatus(installed=True, running=False, detail="stopped")
+
+    def logs(self, name: str, follow: bool = False) -> None:
+        self._require_installed(name)
+        log_file = self.app_dir(name) / "launcher.log"
+        if not log_file.exists():
+            print(f"no logs yet for {name!r}")
+            return
+        if follow:
+            import time
+            with open(log_file) as f:
+                # Print existing content
+                sys.stdout.write(f.read())
+                sys.stdout.flush()
+                while True:
+                    line = f.readline()
+                    if line:
+                        sys.stdout.write(line)
+                        sys.stdout.flush()
+                    else:
+                        time.sleep(0.5)
+        else:
+            print(log_file.read_text(), end="")
 
     def doctor(self) -> list[str]:
         lines = super().doctor()

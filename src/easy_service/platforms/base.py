@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -36,6 +37,10 @@ class ServiceManager(ABC):
     @abstractmethod
     def status(self, name: str) -> ServiceStatus:
         """Return service status."""
+
+    @abstractmethod
+    def logs(self, name: str, follow: bool = False) -> None:
+        """Print service logs to stdout."""
 
     def restart(self, name: str) -> None:
         self.stop(name)

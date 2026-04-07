@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import plistlib
+import sys
 from pathlib import Path
 
 from easy_service.models import ServiceSpec, ServiceStatus
@@ -101,6 +102,18 @@ class MacOSLaunchAgentManager(ServiceManager):
         # launchctl print shows "state = running" or "state = not running"
         running = "state = running" in output.lower()
         return ServiceStatus(installed=True, running=running, detail=output.strip() or "loaded")
+
+    def logs(self, name: str, follow: bool = False) -> None:
+        self._require_installed(name)
+        slug = slugify(name)
+        log_file = self.log_dir() / f"{slug}.log"
+        err_file = self.log_dir() / f"{slug}.err"
+        for f in (log_file, err_file):
+            if f.exists():
+                print(f"# {f}")
+                print(f.read_text(), end="")
+        if not log_file.exists() and not err_file.exists():
+            print(f"no logs yet for {name!r}")
 
     def doctor(self) -> list[str]:
         lines = super().doctor()

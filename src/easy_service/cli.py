@@ -30,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
         cmd.add_argument("name")
         cmd.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
 
+    logs = sub.add_parser("logs", help="Show service logs")
+    logs.add_argument("name")
+    logs.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
+    logs.add_argument("-f", "--follow", action="store_true", default=False, help="Follow log output")
+
     # Internal command used by the Windows launcher daemon
     launch = sub.add_parser("_launch")
     launch.add_argument("name")
@@ -138,6 +143,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{args.name}: {state}")
             if status.detail:
                 print(status.detail)
+            return 0
+
+        if args.command == "logs":
+            manager.logs(args.name, follow=args.follow)
             return 0
 
     except Exception as exc:

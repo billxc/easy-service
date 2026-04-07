@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 from easy_service.models import ServiceSpec, ServiceStatus
@@ -90,6 +92,14 @@ class LinuxUserServiceManager(ServiceManager):
             running=state == "active",
             detail=state or "unknown",
         )
+
+    def logs(self, name: str, follow: bool = False) -> None:
+        self._require_installed(name)
+        unit = self.unit_name(name)
+        cmd = ["journalctl", "--user", "-u", unit, "--no-pager"]
+        if follow:
+            cmd.append("-f")
+        subprocess.run(cmd)
 
     def doctor(self) -> list[str]:
         lines = super().doctor()
