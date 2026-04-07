@@ -102,7 +102,13 @@ class WindowsTaskSchedulerManager(ServiceManager):
         self._run([self._schtasks(), "/delete", "/tn", task_name, "/f"], check=False)
         app_dir = self.app_dir(name)
         if app_dir.exists():
-            shutil.rmtree(app_dir)
+            for f in app_dir.iterdir():
+                if f.suffix == ".log":
+                    continue
+                if f.is_dir():
+                    shutil.rmtree(f)
+                else:
+                    f.unlink()
 
     def start(self, name: str) -> None:
         self._require_installed(name)
@@ -153,7 +159,6 @@ class WindowsTaskSchedulerManager(ServiceManager):
         return ServiceStatus(installed=True, running=False, detail="stopped")
 
     def logs(self, name: str, follow: bool = False) -> None:
-        self._require_installed(name)
         log_file = self.app_dir(name) / "launcher.log"
         if not log_file.exists():
             print(f"no logs yet for {name!r}")
