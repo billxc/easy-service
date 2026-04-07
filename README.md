@@ -102,9 +102,6 @@ uv tool install git+https://github.com/billxc/easy-service.git
 
 # Or install from a local clone
 uv pip install .
-
-# After upgrading easy-service or Python, reinstall existing services:
-# easy-service install <name> -- <command>
 ```
 
 ## Programmatic Usage
