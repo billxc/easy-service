@@ -203,17 +203,18 @@ class WindowsRenderTests(unittest.TestCase):
     def test_runner_contains_command(self) -> None:
         artifacts = self.mgr.render(_make_spec())
         runner = next(iter(artifacts.values()))
-        self.assertIn("$psi.FileName = 'python'", runner)
+        self.assertIn("'python'", runner)
+        self.assertIn("'-m bot'", runner)
 
     def test_runner_sets_cwd(self) -> None:
         spec = _make_spec(working_dir=Path("C:/app"))
         runner = next(iter(self.mgr.render(spec).values()))
-        self.assertIn("$psi.WorkingDirectory = 'C:\\app'", runner)
+        self.assertIn("-WorkingDirectory 'C:\\app'", runner)
 
     def test_runner_sets_env(self) -> None:
         spec = _make_spec(env=(("KEY", "val"),))
         runner = next(iter(self.mgr.render(spec).values()))
-        self.assertIn("$psi.EnvironmentVariables['KEY'] = 'val'", runner)
+        self.assertIn("$env:KEY = 'val'", runner)
 
     def test_registration_script_contains_task_name(self) -> None:
         mgr = WindowsTaskSchedulerManager()

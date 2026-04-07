@@ -47,41 +47,25 @@ class WindowsTaskSchedulerManager(ServiceManager):
         return "'" + value.replace("'", "''") + "'"
 
     def _runner_content(self, spec: ServiceSpec) -> str:
-        command0 = spec.command[0]
-        suffix = Path(command0).suffix.lower()
-        if suffix in {".cmd", ".bat"}:
-            file_name = "cmd.exe"
-            arguments = subprocess.list2cmdline(["/c", *spec.command])
-        elif suffix == ".ps1":
-            file_name = "powershell"
-            arguments = subprocess.list2cmdline(
-                ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", *spec.command]
-            )
-        else:
-            file_name = command0
-            arguments = subprocess.list2cmdline(list(spec.command[1:]))
-
         pid_file = self.pid_path(spec.name)
+        args_list = list(spec.command[1:])
+        args_str = subprocess.list2cmdline(args_list)
 
-        lines = [
-            "$psi = New-Object System.Diagnostics.ProcessStartInfo",
-            f"$psi.FileName = {self._ps_quote(file_name)}",
-            f"$psi.Arguments = {self._ps_quote(arguments)}",
-            "$psi.UseShellExecute = $false",
-        ]
-        if spec.working_dir:
-            lines.append(
-                f"$psi.WorkingDirectory = {self._ps_quote(str(spec.working_dir))}"
-            )
+        lines: list[str] = []
+        # Set environment variables before starting the process
         for key, value in spec.env:
-            lines.append(
-                f"$psi.EnvironmentVariables[{self._ps_quote(key)}] = {self._ps_quote(value)}"
-            )
+            lines.append(f"$env:{key} = {self._ps_quote(value)}")
+
+        start_cmd = f"Start-Process -FilePath {self._ps_quote(spec.command[0])} -PassThru -NoNewWindow"
+        if args_str:
+            start_cmd += f" -ArgumentList {self._ps_quote(args_str)}"
+        if spec.working_dir:
+            start_cmd += f" -WorkingDirectory {self._ps_quote(str(spec.working_dir))}"
+
         lines.extend(
             [
-                "",
-                "$process = [System.Diagnostics.Process]::Start($psi)",
-                f"$process.Id | Out-File -FilePath {self._ps_quote(str(pid_file))} -Encoding ascii -NoNewline",
+                f"$process = {start_cmd}",
+                f"\"$($process.Id) $($process.StartTime.ToFileTimeUtc())\" | Out-File -FilePath {self._ps_quote(str(pid_file))} -Encoding ascii -NoNewline",
                 "",
             ]
         )
@@ -121,6 +105,13 @@ class WindowsTaskSchedulerManager(ServiceManager):
 
     def uninstall(self, name: str) -> None:
         self._require_installed(name)
+        # Stop process if running
+        pid = self._read_pid(name)
+        if pid is not None:
+            self._run(
+                [self._require_binary("taskkill"), "/T", "/F", "/PID", str(pid)],
+                check=False,
+            )
         task_name = self.task_name(name)
         self._run([self._schtasks(), "/delete", "/tn", task_name, "/f"], check=False)
         app_dir = self.app_dir(name)
@@ -131,40 +122,50 @@ class WindowsTaskSchedulerManager(ServiceManager):
         self._require_installed(name)
         self._run([self._schtasks(), "/run", "/tn", self.task_name(name)])
 
-    def stop(self, name: str) -> None:
-        self._require_installed(name)
+    def _read_pid(self, name: str) -> int | None:
+        """Read PID from pid file; return None if stale or missing."""
         pid_file = self.pid_path(name)
         if not pid_file.exists():
+            return None
+        try:
+            parts = pid_file.read_text().strip().split()
+            pid = int(parts[0])
+            if len(parts) >= 2:
+                saved_time = parts[1]
+                # Verify process exists and creation time matches
+                result = self._run(
+                    [self._powershell(), "-NoProfile", "-Command",
+                     f"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; "
+                     f"if ($p) {{ $p.StartTime.ToFileTimeUtc() }} else {{ 'gone' }}"],
+                    check=False,
+                )
+                actual_time = result.stdout.strip()
+                if actual_time == "gone" or actual_time != saved_time:
+                    pid_file.unlink(missing_ok=True)
+                    return None
+            return pid
+        except (ValueError, OSError):
+            return None
+
+    def stop(self, name: str) -> None:
+        self._require_installed(name)
+        pid = self._read_pid(name)
+        if pid is None:
             raise RuntimeError(f"service {name!r} is not running (no pid file)")
-        pid = int(pid_file.read_text().strip())
         self._run(
-            [self._powershell(), "-NoProfile", "-Command",
-             f"Stop-Process -Id {pid} -Force"],
+            [self._require_binary("taskkill"), "/T", "/F", "/PID", str(pid)],
             check=False,
         )
-        pid_file.unlink(missing_ok=True)
+        self.pid_path(name).unlink(missing_ok=True)
 
     def status(self, name: str) -> ServiceStatus:
         runner = self.runner_path(name)
         if not runner.exists():
             return ServiceStatus(installed=False, running=None, detail="not installed")
-        pid_file = self.pid_path(name)
-        if not pid_file.exists():
-            return ServiceStatus(installed=True, running=False, detail="stopped (no pid file)")
-        try:
-            pid = int(pid_file.read_text().strip())
-            result = self._run(
-                [self._powershell(), "-NoProfile", "-Command",
-                 f"Get-Process -Id {pid} -ErrorAction Stop"],
-                check=False,
-            )
-            if result.returncode == 0:
-                return ServiceStatus(installed=True, running=True, detail=f"running (pid {pid})")
-            # Process gone, clean up stale pid file
-            pid_file.unlink(missing_ok=True)
-            return ServiceStatus(installed=True, running=False, detail="stopped")
-        except (ValueError, OSError):
-            return ServiceStatus(installed=True, running=None, detail="invalid pid file")
+        pid = self._read_pid(name)
+        if pid is not None:
+            return ServiceStatus(installed=True, running=True, detail=f"running (pid {pid})")
+        return ServiceStatus(installed=True, running=False, detail="stopped")
 
     def doctor(self) -> list[str]:
         lines = super().doctor()
