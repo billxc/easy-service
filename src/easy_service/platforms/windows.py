@@ -77,6 +77,9 @@ class WindowsTaskSchedulerManager(ServiceManager):
             if d.is_dir() and (d / "spec.json").exists()
         ]
 
+    def list_installed(self) -> list[str]:
+        return self._list_installed()
+
     def _load_spec(self, name: str) -> ServiceSpec:
         """Read spec.json back into a ServiceSpec."""
         data = json.loads(self.spec_path(name).read_text())

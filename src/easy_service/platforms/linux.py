@@ -29,6 +29,17 @@ class LinuxUserServiceManager(ServiceManager):
             )
         return path
 
+    def list_installed(self) -> list[str]:
+        unit_dir = Path.home() / ".config" / "systemd" / "user"
+        if not unit_dir.exists():
+            return []
+        prefix, suffix = "easy-service-", ".service"
+        return sorted(
+            f.name[len(prefix):-len(suffix)]
+            for f in unit_dir.iterdir()
+            if f.name.startswith(prefix) and f.name.endswith(suffix)
+        )
+
     def render(self, spec: ServiceSpec) -> dict[Path, str]:
         spec.validate()
         lines = [

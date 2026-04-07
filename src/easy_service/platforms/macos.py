@@ -40,6 +40,17 @@ class MacOSLaunchAgentManager(ServiceManager):
             )
         return path
 
+    def list_installed(self) -> list[str]:
+        agents_dir = Path.home() / "Library" / "LaunchAgents"
+        if not agents_dir.exists():
+            return []
+        prefix, suffix = "dev.easy-service.", ".plist"
+        return sorted(
+            f.name[len(prefix):-len(suffix)]
+            for f in agents_dir.iterdir()
+            if f.name.startswith(prefix) and f.name.endswith(suffix)
+        )
+
     def render(self, spec: ServiceSpec) -> dict[Path, str]:
         spec.validate()
         log_dir = self.log_dir()

@@ -34,6 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_spec_command(sub, "install", "Install a user-level service")
 
+    sub.add_parser("list", help="List installed services")
+
     for name in ("uninstall", "start", "stop", "restart", "status"):
         cmd = sub.add_parser(name, help=f"{name.capitalize()} a service")
         cmd.add_argument("name")
@@ -112,6 +114,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "doctor":
             for line in manager.doctor():
                 print(line)
+            return 0
+
+        if args.command == "list":
+            names = manager.list_installed()
+            if not names:
+                print("no services installed")
+                return 0
+            for n in names:
+                st = manager.status(n)
+                state = "running" if st.running else "stopped"
+                if st.running is None:
+                    state = "unknown"
+                print(f"{n}\t{state}")
             return 0
 
         if args.command == "_launch":

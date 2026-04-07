@@ -53,6 +53,10 @@ class ServiceManager(ABC):
     def doctor(self) -> list[str]:
         return [f"platform={self.platform_name}"]
 
+    def list_installed(self) -> list[str]:
+        """Return names of all installed services."""
+        return []
+
     def _require_binary(self, name: str) -> str:
         found = shutil.which(name)
         if not found:
