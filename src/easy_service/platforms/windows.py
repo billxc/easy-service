@@ -127,13 +127,8 @@ class WindowsTaskSchedulerManager(ServiceManager):
 
     def start(self, name: str) -> None:
         self._require_installed(name)
-        uv = self._uv_bin()
-        launcher = self._launcher_script(name)
-        app_dir = self.app_dir(name)
-        subprocess.Popen(
-            [uv, "run", "--no-project", str(launcher), name, str(app_dir)],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
+        task_name = self.task_name(name)
+        self._run([self._schtasks(), "/run", "/tn", task_name])
 
     def _read_pid(self, name: str) -> int | None:
         """Read PID from pid file; return None if stale or missing."""
