@@ -54,8 +54,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
         launcher = self.launcher_path(spec.name)
         task_name = self.task_name(spec.name)
         return (
-            "$action = New-ScheduledTaskAction -Execute 'cmd.exe' "
-            f"-Argument '/c \"{launcher}\"'; "
+            f"$action = New-ScheduledTaskAction -Execute '{launcher}'; "
             "$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; "
             "$settings = New-ScheduledTaskSettingsSet "
             "-AllowStartIfOnBatteries "
@@ -131,4 +130,3 @@ class WindowsTaskSchedulerManager(ServiceManager):
         except RuntimeError:
             lines.append("powershell=MISSING (required)")
         return lines
-

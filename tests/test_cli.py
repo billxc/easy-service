@@ -223,6 +223,12 @@ class WindowsRenderTests(unittest.TestCase):
         ps1 = [v for p, v in artifacts.items() if p.name == "register-task.ps1"][0]
         self.assertIn("EasyService-my-svc", ps1)
 
+    def test_ps1_script_executes_launcher_directly(self) -> None:
+        artifacts = self.mgr.render(_make_spec("my-svc"))
+        ps1 = [v for p, v in artifacts.items() if p.name == "register-task.ps1"][0]
+        self.assertNotIn("cmd.exe", ps1)
+        self.assertIn("launcher.cmd", ps1)
+
 
 # ---------------------------------------------------------------------------
 # Existence guard tests
