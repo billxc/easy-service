@@ -30,6 +30,10 @@ def build_parser() -> argparse.ArgumentParser:
         cmd.add_argument("name")
         cmd.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
 
+    # Internal command used by the Windows launcher daemon
+    launch = sub.add_parser("_launch")
+    launch.add_argument("name")
+
     return parser
 
 
@@ -82,6 +86,12 @@ def main(argv: list[str] | None = None) -> int:
             for line in manager.doctor():
                 print(line)
             return 0
+
+        if args.command == "_launch":
+            from easy_service.launcher import launch
+            from easy_service.platforms.windows import WindowsTaskSchedulerManager
+            mgr = WindowsTaskSchedulerManager()
+            return launch(args.name, mgr.app_dir(args.name))
 
         if args.command == "render":
             spec = build_spec(args)

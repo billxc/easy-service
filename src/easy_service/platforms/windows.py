@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -22,61 +23,45 @@ class WindowsTaskSchedulerManager(ServiceManager):
         local_app = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
         return local_app / "easy-service" / slugify(name)
 
-    def runner_path(self, name: str) -> Path:
-        return self.app_dir(name) / "run.ps1"
+    def spec_path(self, name: str) -> Path:
+        return self.app_dir(name) / "spec.json"
 
     def pid_path(self, name: str) -> Path:
         return self.app_dir(name) / "pid"
 
-    def _powershell(self) -> str:
-        return self._require_binary("powershell")
+    def _easy_service_bin(self) -> str:
+        return self._require_binary("easy-service")
 
     def _schtasks(self) -> str:
         return self._require_binary("schtasks")
 
     def _require_installed(self, name: str) -> Path:
-        path = self.runner_path(name)
+        path = self.spec_path(name)
         if not path.exists():
             raise RuntimeError(
-                f"service {name!r} is not installed (no runner at {path})\n"
+                f"service {name!r} is not installed (no spec at {path})\n"
                 f"hint: run 'easy-service install {name} -- <command>' first"
             )
         return path
 
-    def _ps_quote(self, value: str) -> str:
-        return "'" + value.replace("'", "''") + "'"
-
-    def _runner_content(self, spec: ServiceSpec) -> str:
-        pid_file = self.pid_path(spec.name)
-        args_list = list(spec.command[1:])
-        args_str = subprocess.list2cmdline(args_list)
-
-        lines: list[str] = []
-        # Set environment variables before starting the process
-        for key, value in spec.env:
-            lines.append(f"$env:{key} = {self._ps_quote(value)}")
-
-        start_cmd = f"Start-Process -FilePath {self._ps_quote(spec.command[0])} -PassThru -NoNewWindow"
-        if args_str:
-            start_cmd += f" -ArgumentList {self._ps_quote(args_str)}"
-        if spec.working_dir:
-            start_cmd += f" -WorkingDirectory {self._ps_quote(str(spec.working_dir))}"
-
-        lines.extend(
-            [
-                f"$process = {start_cmd}",
-                f"\"$($process.Id) $($process.StartTime.ToFileTimeUtc())\" | Out-File -FilePath {self._ps_quote(str(pid_file))} -Encoding ascii -NoNewline",
-                "",
-            ]
-        )
-        return "\r\n".join(lines)
+    @staticmethod
+    def _spec_to_json(spec: ServiceSpec) -> str:
+        data = {
+            "name": spec.name,
+            "command": list(spec.command),
+            "working_dir": str(spec.working_dir) if spec.working_dir else None,
+            "env": {k: v for k, v in spec.env},
+            "auto_start": spec.auto_start,
+            "keep_alive": spec.keep_alive,
+        }
+        return json.dumps(data, indent=2)
 
     def _registration_script(self, spec: ServiceSpec) -> str:
-        runner = self.runner_path(spec.name)
+        es_bin = self._easy_service_bin()
         task_name = self.task_name(spec.name)
         return (
-            "$action = New-ScheduledTaskAction -Execute 'powershell' "
-            f"-Argument '-NoProfile -ExecutionPolicy Bypass -File \"{runner}\"'; "
+            f"$action = New-ScheduledTaskAction -Execute '{es_bin}' "
+            f"-Argument '_launch {spec.name}'; "
             "$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; "
             "$settings = New-ScheduledTaskSettingsSet "
             "-AllowStartIfOnBatteries "
@@ -89,23 +74,23 @@ class WindowsTaskSchedulerManager(ServiceManager):
     def render(self, spec: ServiceSpec) -> dict[Path, str]:
         spec.validate()
         return {
-            self.runner_path(spec.name): self._runner_content(spec),
+            self.spec_path(spec.name): self._spec_to_json(spec),
         }
 
     def install(self, spec: ServiceSpec) -> None:
-        self._powershell()
+        self._easy_service_bin()
         artifacts = self.render(spec)
         for path, content in artifacts.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
-        self._run([self._powershell(), "-NoProfile", "-Command",
+        powershell = self._require_binary("powershell")
+        self._run([powershell, "-NoProfile", "-Command",
                    self._registration_script(spec)])
         if spec.auto_start:
             self.start(spec.name)
 
     def uninstall(self, name: str) -> None:
         self._require_installed(name)
-        # Stop process if running
         pid = self._read_pid(name)
         if pid is not None:
             self._run(
@@ -120,9 +105,12 @@ class WindowsTaskSchedulerManager(ServiceManager):
 
     def start(self, name: str) -> None:
         self._require_installed(name)
-        runner = self.runner_path(name)
-        self._run([self._powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
-                   "-File", str(runner)])
+        es_bin = self._easy_service_bin()
+        # Start launcher in background
+        subprocess.Popen(
+            [es_bin, "_launch", name],
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+        )
 
     def _read_pid(self, name: str) -> int | None:
         """Read PID from pid file; return None if stale or missing."""
@@ -134,15 +122,9 @@ class WindowsTaskSchedulerManager(ServiceManager):
             pid = int(parts[0])
             if len(parts) >= 2:
                 saved_time = parts[1]
-                # Verify process exists and creation time matches
-                result = self._run(
-                    [self._powershell(), "-NoProfile", "-Command",
-                     f"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; "
-                     f"if ($p) {{ $p.StartTime.ToFileTimeUtc() }} else {{ 'gone' }}"],
-                    check=False,
-                )
-                actual_time = result.stdout.strip()
-                if actual_time == "gone" or actual_time != saved_time:
+                from easy_service.launcher import _creation_time
+                actual_time = _creation_time(pid)
+                if actual_time == "0" or actual_time != saved_time:
                     pid_file.unlink(missing_ok=True)
                     return None
             return pid
@@ -161,8 +143,8 @@ class WindowsTaskSchedulerManager(ServiceManager):
         self.pid_path(name).unlink(missing_ok=True)
 
     def status(self, name: str) -> ServiceStatus:
-        runner = self.runner_path(name)
-        if not runner.exists():
+        sp = self.spec_path(name)
+        if not sp.exists():
             return ServiceStatus(installed=False, running=None, detail="not installed")
         pid = self._read_pid(name)
         if pid is not None:
@@ -178,8 +160,8 @@ class WindowsTaskSchedulerManager(ServiceManager):
         except RuntimeError:
             lines.append("schtasks=MISSING (required)")
         try:
-            self._require_binary("powershell")
-            lines.append("powershell=yes")
+            self._require_binary("easy-service")
+            lines.append("easy-service=yes")
         except RuntimeError:
-            lines.append("powershell=MISSING (required)")
+            lines.append("easy-service=MISSING (required)")
         return lines

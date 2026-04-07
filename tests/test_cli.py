@@ -195,38 +195,36 @@ class WindowsRenderTests(unittest.TestCase):
     def setUp(self) -> None:
         self.mgr = WindowsTaskSchedulerManager()
 
-    def test_render_produces_single_artifact(self) -> None:
+    def test_render_produces_spec_json(self) -> None:
         artifacts = self.mgr.render(_make_spec())
         names = {p.name for p in artifacts}
-        self.assertEqual(names, {"run.ps1"})
+        self.assertEqual(names, {"spec.json"})
 
-    def test_runner_contains_command(self) -> None:
-        artifacts = self.mgr.render(_make_spec())
-        runner = next(iter(artifacts.values()))
-        self.assertIn("'python'", runner)
-        self.assertIn("'-m bot'", runner)
+    def test_spec_contains_command(self) -> None:
+        spec_json = next(iter(self.mgr.render(_make_spec()).values()))
+        import json
+        data = json.loads(spec_json)
+        self.assertEqual(data["command"], ["python", "-m", "bot"])
 
-    def test_runner_sets_cwd(self) -> None:
+    def test_spec_contains_cwd(self) -> None:
         spec = _make_spec(working_dir=Path("C:/app"))
-        runner = next(iter(self.mgr.render(spec).values()))
-        self.assertIn("-WorkingDirectory 'C:\\app'", runner)
+        spec_json = next(iter(self.mgr.render(spec).values()))
+        import json
+        data = json.loads(spec_json)
+        self.assertEqual(data["working_dir"], "C:\\app")
 
-    def test_runner_sets_env(self) -> None:
+    def test_spec_contains_env(self) -> None:
         spec = _make_spec(env=(("KEY", "val"),))
-        runner = next(iter(self.mgr.render(spec).values()))
-        self.assertIn("$env:KEY = 'val'", runner)
+        spec_json = next(iter(self.mgr.render(spec).values()))
+        import json
+        data = json.loads(spec_json)
+        self.assertEqual(data["env"], {"KEY": "val"})
 
-    def test_registration_script_contains_task_name(self) -> None:
-        mgr = WindowsTaskSchedulerManager()
-        script = mgr._registration_script(_make_spec("my-svc"))
-        self.assertIn("EasyService-my-svc", script)
-        self.assertIn("powershell", script)
-        self.assertIn("run.ps1", script)
-
-    def test_runner_writes_pid_file(self) -> None:
-        runner = next(iter(self.mgr.render(_make_spec("my-svc")).values()))
-        self.assertIn("Out-File", runner)
-        self.assertIn("pid", runner)
+    def test_spec_contains_keep_alive(self) -> None:
+        spec_json = next(iter(self.mgr.render(_make_spec()).values()))
+        import json
+        data = json.loads(spec_json)
+        self.assertTrue(data["keep_alive"])
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +304,7 @@ class CLITests(unittest.TestCase):
         with redirect_stdout(stdout):
             code = main(argv)
         self.assertEqual(code, 0)
-        self.assertIn("run.ps1", stdout.getvalue())
+        self.assertIn("spec.json", stdout.getvalue())
 
     def test_status_not_installed_returns_1(self) -> None:
         stdout = io.StringIO()
