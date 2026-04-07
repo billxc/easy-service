@@ -101,6 +101,15 @@ class LinuxUserServiceManager(ServiceManager):
             cmd.append("-f")
         subprocess.run(cmd)
 
+    def events(self, name: str, follow: bool = False) -> None:
+        self._require_installed(name)
+        unit = self.unit_name(name)
+        cmd = ["journalctl", "--user", "-u", unit, "--no-pager",
+               "--output", "short", "--grep", "systemd"]
+        if follow:
+            cmd.append("-f")
+        subprocess.run(cmd)
+
     def doctor(self) -> list[str]:
         lines = super().doctor()
         unit_dir = self.unit_path("example").parent

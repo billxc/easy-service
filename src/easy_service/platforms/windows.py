@@ -158,15 +158,13 @@ class WindowsTaskSchedulerManager(ServiceManager):
             return ServiceStatus(installed=True, running=True, detail=f"running (pid {pid})")
         return ServiceStatus(installed=True, running=False, detail="stopped")
 
-    def logs(self, name: str, follow: bool = False) -> None:
-        log_file = self.app_dir(name) / "launcher.log"
-        if not log_file.exists():
-            print(f"no logs yet for {name!r}")
+    def _tail_file(self, path: Path, follow: bool) -> None:
+        if not path.exists():
+            print(f"no logs yet: {path}")
             return
         if follow:
             import time
-            with open(log_file) as f:
-                # Print existing content
+            with open(path) as f:
                 sys.stdout.write(f.read())
                 sys.stdout.flush()
                 while True:
@@ -177,7 +175,13 @@ class WindowsTaskSchedulerManager(ServiceManager):
                     else:
                         time.sleep(0.5)
         else:
-            print(log_file.read_text(), end="")
+            print(path.read_text(), end="")
+
+    def logs(self, name: str, follow: bool = False) -> None:
+        self._tail_file(self.app_dir(name) / "output.log", follow)
+
+    def events(self, name: str, follow: bool = False) -> None:
+        self._tail_file(self.app_dir(name) / "launcher.log", follow)
 
     def doctor(self) -> list[str]:
         lines = super().doctor()

@@ -40,7 +40,11 @@ class ServiceManager(ABC):
 
     @abstractmethod
     def logs(self, name: str, follow: bool = False) -> None:
-        """Print service logs to stdout."""
+        """Print service stdout/stderr to stdout."""
+
+    @abstractmethod
+    def events(self, name: str, follow: bool = False) -> None:
+        """Print launcher lifecycle events."""
 
     def restart(self, name: str) -> None:
         self.stop(name)

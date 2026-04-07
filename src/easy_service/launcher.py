@@ -72,6 +72,7 @@ def launch(name: str, app_dir: Path) -> int:
     # Write launcher PID file
     pid_path = app_dir / "pid"
     log_path = app_dir / "launcher.log"
+    output_path = app_dir / "output.log"
     _write_pid(pid_path)
 
     def _log(msg: str) -> None:
@@ -88,10 +89,13 @@ def launch(name: str, app_dir: Path) -> int:
         while True:
             start_time = time.monotonic()
             _log(f"starting child: {command}")
+            output_file = open(output_path, "a")
             proc = subprocess.Popen(
                 command,
                 cwd=working_dir,
                 env=child_env,
+                stdout=output_file,
+                stderr=subprocess.STDOUT,
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
             _log(f"child started, pid={proc.pid}")
@@ -105,6 +109,8 @@ def launch(name: str, app_dir: Path) -> int:
                     proc.kill()
                 _log("interrupted, exiting")
                 return 1
+            finally:
+                output_file.close()
 
             _log(f"child exited, code={proc.returncode}")
 

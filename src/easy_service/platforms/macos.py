@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import plistlib
+import subprocess
 import sys
 from pathlib import Path
 
@@ -114,6 +115,16 @@ class MacOSLaunchAgentManager(ServiceManager):
                 print(f.read_text(), end="")
         if not log_file.exists() and not err_file.exists():
             print(f"no logs yet for {name!r}")
+
+    def events(self, name: str, follow: bool = False) -> None:
+        self._require_installed(name)
+        cmd = ["log", "show", "--predicate",
+               f'subsystem == "com.apple.launchd" AND composedMessage CONTAINS "{self.label(name)}"',
+               "--last", "1h"]
+        if follow:
+            cmd = ["log", "stream", "--predicate",
+                   f'subsystem == "com.apple.launchd" AND composedMessage CONTAINS "{self.label(name)}"']
+        subprocess.run(cmd)
 
     def doctor(self) -> list[str]:
         lines = super().doctor()
