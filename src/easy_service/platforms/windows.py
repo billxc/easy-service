@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -33,22 +32,12 @@ class WindowsTaskSchedulerManager(ServiceManager):
     def _uv_bin(self) -> str:
         return self._require_binary("uv")
 
-    def _resolve_python(self) -> str:
-        """Resolve Python path via uv for use in Task Scheduler."""
-        uv = self._uv_bin()
-        result = self._run([uv, "run", "--no-project", "python", "-c",
-                           "import sys; print(sys.executable)"])
-        return result.stdout.strip()
-
-    def _launcher_script(self, name: str) -> Path:
-        return self.app_dir(name) / "launcher.py"
-
-    def _copy_launcher(self, name: str) -> None:
-        """Copy launcher.py to app_dir so it can run standalone."""
-        from easy_service import launcher
-        src = Path(launcher.__file__)
-        dst = self._launcher_script(name)
+    def _service_exe(self, name: str) -> Path:
+        """Copy easy-service.exe to a named exe so it shows in Task Manager."""
+        src = Path(self._easy_service_bin())
+        dst = self.app_dir(name) / f"{self.task_name(name)}.exe"
         shutil.copy2(src, dst)
+        return dst
 
     def _easy_service_bin(self) -> str:
         return self._require_binary("easy-service")
@@ -78,13 +67,11 @@ class WindowsTaskSchedulerManager(ServiceManager):
         return json.dumps(data, indent=2)
 
     def _registration_script(self, spec: ServiceSpec) -> str:
-        python = self._resolve_python()
-        launcher = self._launcher_script(spec.name)
-        app_dir = self.app_dir(spec.name)
+        exe = self._service_exe(spec.name)
         task_name = self.task_name(spec.name)
         return (
-            f"$action = New-ScheduledTaskAction -Execute '{python}' "
-            f"-Argument '{launcher} {spec.name} {app_dir}'; "
+            f"$action = New-ScheduledTaskAction -Execute '{exe}' "
+            f"-Argument '_launch {spec.name}'; "
             "$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; "
             "$settings = New-ScheduledTaskSettingsSet "
             "-AllowStartIfOnBatteries "
@@ -105,7 +92,6 @@ class WindowsTaskSchedulerManager(ServiceManager):
         for path, content in artifacts.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
-        self._copy_launcher(spec.name)
         powershell = self._require_binary("powershell")
         self._run([powershell, "-NoProfile", "-Command",
                    self._registration_script(spec)])
