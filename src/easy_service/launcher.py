@@ -110,15 +110,15 @@ def launch(name: str, app_dir: Path) -> int:
             if not keep_alive:
                 return proc.returncode or 0
 
-            # Reset backoff if process ran long enough
+            # Stable run → restart immediately; crash loop → backoff
             elapsed = time.monotonic() - start_time
             if elapsed >= stable_threshold:
                 backoff = 1
+                _log("restarting immediately")
             else:
                 backoff = min(backoff * 2, max_backoff)
-
-            _log(f"restarting in {backoff}s")
-            time.sleep(backoff)
+                _log(f"restarting in {backoff}s (crash loop backoff)")
+                time.sleep(backoff)
     finally:
         _log("launcher exiting")
         pid_path.unlink(missing_ok=True)
