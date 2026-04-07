@@ -129,3 +129,9 @@ def launch(name: str, app_dir: Path) -> int:
     finally:
         _log("launcher exiting")
         pid_path.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    name = sys.argv[1]
+    app_dir = Path(sys.argv[2])
+    sys.exit(launch(name, app_dir))

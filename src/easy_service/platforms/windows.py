@@ -30,6 +30,20 @@ class WindowsTaskSchedulerManager(ServiceManager):
     def pid_path(self, name: str) -> Path:
         return self.app_dir(name) / "pid"
 
+    def _base_python(self) -> str:
+        """Return base Python interpreter path (outside uv tool venv)."""
+        return getattr(sys, '_base_executable', sys.executable)
+
+    def _launcher_script(self, name: str) -> Path:
+        return self.app_dir(name) / "launcher.py"
+
+    def _copy_launcher(self, name: str) -> None:
+        """Copy launcher.py to app_dir so it can run standalone."""
+        from easy_service import launcher
+        src = Path(launcher.__file__)
+        dst = self._launcher_script(name)
+        shutil.copy2(src, dst)
+
     def _easy_service_bin(self) -> str:
         return self._require_binary("easy-service")
 
@@ -58,11 +72,13 @@ class WindowsTaskSchedulerManager(ServiceManager):
         return json.dumps(data, indent=2)
 
     def _registration_script(self, spec: ServiceSpec) -> str:
-        es_bin = self._easy_service_bin()
+        python = self._base_python()
+        launcher = self._launcher_script(spec.name)
+        app_dir = self.app_dir(spec.name)
         task_name = self.task_name(spec.name)
         return (
-            f"$action = New-ScheduledTaskAction -Execute '{es_bin}' "
-            f"-Argument '_launch {spec.name}'; "
+            f"$action = New-ScheduledTaskAction -Execute '{python}' "
+            f"-Argument '{launcher} {spec.name} {app_dir}'; "
             "$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; "
             "$settings = New-ScheduledTaskSettingsSet "
             "-AllowStartIfOnBatteries "
@@ -79,11 +95,11 @@ class WindowsTaskSchedulerManager(ServiceManager):
         }
 
     def install(self, spec: ServiceSpec) -> None:
-        self._easy_service_bin()
         artifacts = self.render(spec)
         for path, content in artifacts.items():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
+        self._copy_launcher(spec.name)
         powershell = self._require_binary("powershell")
         self._run([powershell, "-NoProfile", "-Command",
                    self._registration_script(spec)])
@@ -112,10 +128,11 @@ class WindowsTaskSchedulerManager(ServiceManager):
 
     def start(self, name: str) -> None:
         self._require_installed(name)
-        es_bin = self._easy_service_bin()
-        # Start launcher in background
+        python = self._base_python()
+        launcher = self._launcher_script(name)
+        app_dir = self.app_dir(name)
         subprocess.Popen(
-            [es_bin, "_launch", name],
+            [python, str(launcher), name, str(app_dir)],
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
