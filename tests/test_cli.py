@@ -198,36 +198,42 @@ class WindowsRenderTests(unittest.TestCase):
     def test_artifacts_contain_launcher_and_script(self) -> None:
         artifacts = self.mgr.render(_make_spec())
         names = {p.name for p in artifacts}
-        self.assertIn("launcher.cmd", names)
+        self.assertIn("run.ps1", names)
         self.assertIn("register-task.ps1", names)
 
-    def test_launcher_contains_command(self) -> None:
+    def test_runner_contains_command(self) -> None:
         artifacts = self.mgr.render(_make_spec())
-        launcher = [v for p, v in artifacts.items() if p.name == "launcher.cmd"][0]
-        self.assertIn("python", launcher)
+        runner = [v for p, v in artifacts.items() if p.name == "run.ps1"][0]
+        self.assertIn("$psi.FileName = 'python'", runner)
 
-    def test_launcher_sets_cwd(self) -> None:
+    def test_runner_sets_cwd(self) -> None:
         spec = _make_spec(working_dir=Path("C:/app"))
         artifacts = self.mgr.render(spec)
-        launcher = [v for p, v in artifacts.items() if p.name == "launcher.cmd"][0]
-        self.assertIn('cd /d "C:', launcher)
+        runner = [v for p, v in artifacts.items() if p.name == "run.ps1"][0]
+        self.assertIn("$psi.WorkingDirectory = 'C:\\app'", runner)
 
-    def test_launcher_sets_env(self) -> None:
+    def test_runner_sets_env(self) -> None:
         spec = _make_spec(env=(("KEY", "val"),))
         artifacts = self.mgr.render(spec)
-        launcher = [v for p, v in artifacts.items() if p.name == "launcher.cmd"][0]
-        self.assertIn('set "KEY=val"', launcher)
+        runner = [v for p, v in artifacts.items() if p.name == "run.ps1"][0]
+        self.assertIn("$psi.EnvironmentVariables['KEY'] = 'val'", runner)
 
     def test_ps1_script_contains_task_name(self) -> None:
         artifacts = self.mgr.render(_make_spec("my-svc"))
         ps1 = [v for p, v in artifacts.items() if p.name == "register-task.ps1"][0]
         self.assertIn("EasyService-my-svc", ps1)
 
-    def test_ps1_script_executes_launcher_directly(self) -> None:
+    def test_ps1_script_executes_runner_via_powershell(self) -> None:
         artifacts = self.mgr.render(_make_spec("my-svc"))
         ps1 = [v for p, v in artifacts.items() if p.name == "register-task.ps1"][0]
-        self.assertNotIn("cmd.exe", ps1)
-        self.assertIn("launcher.cmd", ps1)
+        self.assertIn("powershell", ps1)
+        self.assertIn("run.ps1", ps1)
+
+    def test_runner_binds_child_process_to_job(self) -> None:
+        artifacts = self.mgr.render(_make_spec("my-svc"))
+        runner = [v for p, v in artifacts.items() if p.name == "run.ps1"][0]
+        self.assertIn("AssignProcessToJobObject", runner)
+        self.assertIn("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE", runner)
 
 
 # ---------------------------------------------------------------------------
