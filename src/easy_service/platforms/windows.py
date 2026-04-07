@@ -33,6 +33,13 @@ class WindowsTaskSchedulerManager(ServiceManager):
     def _uv_bin(self) -> str:
         return self._require_binary("uv")
 
+    def _resolve_python(self) -> str:
+        """Resolve Python path via uv for use in Task Scheduler."""
+        uv = self._uv_bin()
+        result = self._run([uv, "run", "--no-project", "python", "-c",
+                           "import sys; print(sys.executable)"])
+        return result.stdout.strip()
+
     def _launcher_script(self, name: str) -> Path:
         return self.app_dir(name) / "launcher.py"
 
@@ -71,13 +78,13 @@ class WindowsTaskSchedulerManager(ServiceManager):
         return json.dumps(data, indent=2)
 
     def _registration_script(self, spec: ServiceSpec) -> str:
-        uv = self._uv_bin()
+        python = self._resolve_python()
         launcher = self._launcher_script(spec.name)
         app_dir = self.app_dir(spec.name)
         task_name = self.task_name(spec.name)
         return (
-            f"$action = New-ScheduledTaskAction -Execute '{uv}' "
-            f"-Argument 'run --no-project {launcher} {spec.name} {app_dir}'; "
+            f"$action = New-ScheduledTaskAction -Execute '{python}' "
+            f"-Argument '{launcher} {spec.name} {app_dir}'; "
             "$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME; "
             "$settings = New-ScheduledTaskSettingsSet "
             "-AllowStartIfOnBatteries "
