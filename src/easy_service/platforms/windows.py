@@ -116,7 +116,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
         # Start launcher in background
         subprocess.Popen(
             [es_bin, "_launch", name],
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
     def _read_pid(self, name: str) -> int | None:

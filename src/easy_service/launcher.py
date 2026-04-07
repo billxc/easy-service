@@ -92,6 +92,7 @@ def launch(name: str, app_dir: Path) -> int:
                 command,
                 cwd=working_dir,
                 env=child_env,
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
             _log(f"child started, pid={proc.pid}")
             try:
