@@ -164,16 +164,19 @@ class WindowsTaskSchedulerManager(ServiceManager):
             return
         if follow:
             import time
-            with open(path) as f:
-                sys.stdout.write(f.read())
-                sys.stdout.flush()
-                while True:
-                    line = f.readline()
-                    if line:
-                        sys.stdout.write(line)
-                        sys.stdout.flush()
-                    else:
-                        time.sleep(0.5)
+            try:
+                with open(path) as f:
+                    sys.stdout.write(f.read())
+                    sys.stdout.flush()
+                    while True:
+                        line = f.readline()
+                        if line:
+                            sys.stdout.write(line)
+                            sys.stdout.flush()
+                        else:
+                            time.sleep(0.5)
+            except KeyboardInterrupt:
+                pass
         else:
             print(path.read_text(), end="")
 
