@@ -23,8 +23,8 @@ class ServiceManager(ABC):
         """Install the service for the current user."""
 
     @abstractmethod
-    def uninstall(self, name: str) -> None:
-        """Uninstall the service."""
+    def uninstall(self, name: str, *, clean: bool = False) -> None:
+        """Uninstall the service. If clean=True, remove all data including logs."""
 
     @abstractmethod
     def start(self, name: str) -> None:

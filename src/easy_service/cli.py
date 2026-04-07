@@ -41,7 +41,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("list", help="List installed services")
 
-    for name in ("uninstall", "start", "stop", "restart", "status"):
+    uninstall = sub.add_parser("uninstall", help="Uninstall a service")
+    uninstall.add_argument("name")
+    uninstall.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
+    uninstall.add_argument("--clean", action="store_true", default=False, help="Remove all data including logs")
+
+    for name in ("start", "stop", "restart", "status"):
         cmd = sub.add_parser(name, help=f"{name.capitalize()} a service")
         cmd.add_argument("name")
         cmd.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
@@ -155,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "uninstall":
-            manager.uninstall(args.name)
+            manager.uninstall(args.name, clean=args.clean)
             print(f"uninstalled {args.name}")
             return 0
 

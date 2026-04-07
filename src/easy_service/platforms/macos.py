@@ -82,7 +82,7 @@ class MacOSLaunchAgentManager(ServiceManager):
         if spec.auto_start:
             self._run(["launchctl", "kickstart", "-k", self._job(spec.name)])
 
-    def uninstall(self, name: str) -> None:
+    def uninstall(self, name: str, *, clean: bool = False) -> None:
         self._require_binary("launchctl")
         self._require_installed(name)
         self._run(["launchctl", "bootout", self._job(name)], check=False)

@@ -136,7 +136,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
         if spec.auto_start:
             self.start(spec.name)
 
-    def uninstall(self, name: str) -> None:
+    def uninstall(self, name: str, *, clean: bool = False) -> None:
         self._require_installed(name)
         pid = self._read_pid(name)
         if pid is not None:
@@ -148,13 +148,16 @@ class WindowsTaskSchedulerManager(ServiceManager):
         self._run([self._schtasks(), "/delete", "/tn", task_name, "/f"], check=False)
         app_dir = self.app_dir(name)
         if app_dir.exists():
-            for f in app_dir.iterdir():
-                if f.suffix == ".log":
-                    continue
-                if f.is_dir():
-                    shutil.rmtree(f)
-                else:
-                    f.unlink()
+            if clean:
+                shutil.rmtree(app_dir)
+            else:
+                for f in app_dir.iterdir():
+                    if f.suffix == ".log":
+                        continue
+                    if f.is_dir():
+                        shutil.rmtree(f)
+                    else:
+                        f.unlink()
 
     def start(self, name: str) -> None:
         self._require_installed(name)

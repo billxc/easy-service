@@ -71,7 +71,7 @@ class LinuxUserServiceManager(ServiceManager):
         if spec.auto_start:
             self.start(spec.name)
 
-    def uninstall(self, name: str) -> None:
+    def uninstall(self, name: str, *, clean: bool = False) -> None:
         self._require_binary("systemctl")
         self._require_installed(name)
         unit = self.unit_name(name)
