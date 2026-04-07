@@ -66,6 +66,29 @@ class WindowsTaskSchedulerManager(ServiceManager):
             )
         return path
 
+    def _list_installed(self) -> list[str]:
+        """Return names of all installed services."""
+        local_app = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        base = local_app / "easy-service"
+        if not base.exists():
+            return []
+        return [
+            d.name for d in sorted(base.iterdir())
+            if d.is_dir() and (d / "spec.json").exists()
+        ]
+
+    def _load_spec(self, name: str) -> ServiceSpec:
+        """Read spec.json back into a ServiceSpec."""
+        data = json.loads(self.spec_path(name).read_text())
+        return ServiceSpec(
+            name=data["name"],
+            command=tuple(data["command"]),
+            working_dir=Path(data["working_dir"]) if data.get("working_dir") else None,
+            env=data.get("env", {}),
+            auto_start=data.get("auto_start", True),
+            keep_alive=data.get("keep_alive", True),
+        )
+
     @staticmethod
     def _spec_to_json(spec: ServiceSpec) -> str:
         data = {
@@ -135,15 +158,29 @@ class WindowsTaskSchedulerManager(ServiceManager):
         task_name = self.task_name(name)
         self._run([self._schtasks(), "/run", "/tn", task_name])
 
-    def upgrade(self, name: str) -> None:
-        """Re-copy the tool venv to pick up Python or easy-service upgrades."""
-        self._require_installed(name)
-        was_running = self._read_pid(name) is not None
-        if was_running:
-            self.stop(name)
-        self._service_exe(name)
-        if was_running:
-            self.start(name)
+    def upgrade(self, name: str | None = None) -> list[str]:
+        """Re-copy venv and re-register task for one or all services.
+
+        Returns list of upgraded service names.
+        """
+        names = [name] if name else self._list_installed()
+        if not names:
+            raise RuntimeError("no services installed")
+        powershell = self._require_binary("powershell")
+        upgraded = []
+        for n in names:
+            self._require_installed(n)
+            was_running = self._read_pid(n) is not None
+            if was_running:
+                self.stop(n)
+            spec = self._load_spec(n)
+            self._service_exe(n)
+            self._run([powershell, "-NoProfile", "-Command",
+                       self._registration_script(spec)])
+            if was_running:
+                self.start(n)
+            upgraded.append(n)
+        return upgraded
 
     def _read_pid(self, name: str) -> int | None:
         """Read PID from pid file; return None if stale or missing."""

@@ -40,7 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
         cmd.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
 
     upgrade = sub.add_parser("upgrade", help="Re-sync service runtime (Windows only)")
-    upgrade.add_argument("name")
+    upgrade.add_argument("name", nargs="?", default=None, help="Service name (omit to upgrade all)")
     upgrade.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
 
     logs = sub.add_parser("logs", help="Show service output (stdout/stderr)")
@@ -143,8 +143,9 @@ def main(argv: list[str] | None = None) -> int:
             if not hasattr(manager, "upgrade"):
                 print(f"error: upgrade is not supported on {manager.platform_name}", file=sys.stderr)
                 return 1
-            manager.upgrade(args.name)
-            print(f"upgraded {args.name}")
+            upgraded = manager.upgrade(args.name)
+            for name in upgraded:
+                print(f"upgraded {name}")
             return 0
 
         if args.command == "start":
