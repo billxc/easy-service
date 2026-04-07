@@ -96,7 +96,7 @@ def build_spec(args) -> ServiceSpec:
         raise ValueError("no command provided (did you forget to add -- before the command?)")
     cwd = args.cwd
     if cwd is not None:
-        cwd = cwd.resolve()
+        cwd = cwd.expanduser().resolve()
         if not cwd.is_dir():
             raise ValueError(f"working directory does not exist: {cwd}")
     spec = ServiceSpec(

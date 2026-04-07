@@ -83,6 +83,13 @@ class BuildSpecTests(unittest.TestCase):
         spec = _build_spec_from_args("demo", extra_env=["FOO=bar", "BAZ=1"])
         self.assertEqual(dict(spec.env), {"FOO": "bar", "BAZ": "1"})
 
+    def test_tilde_in_cwd_is_expanded(self) -> None:
+        home = Path.home()
+        with tempfile.TemporaryDirectory(dir=home) as tmpdir:
+            rel = Path(tmpdir).relative_to(home)
+            spec = _build_spec_from_args("demo", cwd=Path(f"~/{rel}"))
+            self.assertEqual(spec.working_dir, Path(tmpdir).resolve())
+
     def test_rejects_nonexistent_cwd(self) -> None:
         with self.assertRaises(ValueError):
             _build_spec_from_args("demo", cwd=Path("/nonexistent/path/xyz"))
