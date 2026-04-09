@@ -175,7 +175,7 @@ class LinuxRenderTests(unittest.TestCase):
 
     def test_exec_start(self) -> None:
         content = next(iter(self.mgr.render(_make_spec()).values()))
-        self.assertIn("ExecStart=python -m bot", content)
+        self.assertIn("ExecStart=/bin/bash -lc 'python -m bot'", content)
 
     def test_working_directory(self) -> None:
         spec = _make_spec(working_dir=Path("/srv/app"))

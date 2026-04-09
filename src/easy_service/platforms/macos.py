@@ -10,7 +10,7 @@ from pathlib import Path
 
 from easy_service.models import ServiceSpec, ServiceStatus
 from easy_service.platforms.base import ServiceManager
-from easy_service.utils import slugify
+from easy_service.utils import shell_join, slugify
 
 
 class MacOSLaunchAgentManager(ServiceManager):
@@ -56,7 +56,7 @@ class MacOSLaunchAgentManager(ServiceManager):
         log_dir = self.log_dir()
         plist: dict = {
             "Label": self.label(spec.name),
-            "ProgramArguments": list(spec.command),
+            "ProgramArguments": ["/bin/zsh", "-lc", shell_join(spec.command)],
             "RunAtLoad": spec.auto_start,
             "KeepAlive": spec.keep_alive,
             "StandardOutPath": str(log_dir / f"{spec.slug}.log"),
@@ -103,6 +103,13 @@ class MacOSLaunchAgentManager(ServiceManager):
         # (a simple kill would cause launchd to respawn immediately)
         self._run(["launchctl", "bootout", self._job(name)])
 
+    def restart(self, name: str) -> None:
+        self._require_binary("launchctl")
+        plist_path = self._require_installed(name)
+        # Ensure the job is loaded, then kickstart -k kills and restarts it
+        self._run(["launchctl", "bootstrap", self._domain(), str(plist_path)], check=False)
+        self._run(["launchctl", "kickstart", "-k", self._job(name)])
+
     def status(self, name: str) -> ServiceStatus:
         plist_path = self.plist_path(name)
         if not plist_path.exists():
@@ -120,12 +127,21 @@ class MacOSLaunchAgentManager(ServiceManager):
         slug = slugify(name)
         log_file = self.log_dir() / f"{slug}.log"
         err_file = self.log_dir() / f"{slug}.err"
-        for f in (log_file, err_file):
-            if f.exists():
-                print(f"# {f}")
-                print(f.read_text(), end="")
-        if not log_file.exists() and not err_file.exists():
+        existing = [f for f in (log_file, err_file) if f.exists()]
+        if not existing:
             print(f"no logs yet for {name!r}")
+            return
+        if follow:
+            cmd = ["tail", "-f"] + [str(f) for f in existing]
+            subprocess.run(cmd)
+        else:
+            for f in existing:
+                print(f"# {f}")
+                content = f.read_text()
+                if content:
+                    print(content, end="" if content.endswith("\n") else "\n")
+                else:
+                    print("(empty)")
 
     def events(self, name: str, follow: bool = False) -> None:
         self._require_installed(name)

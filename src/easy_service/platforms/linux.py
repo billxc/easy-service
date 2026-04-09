@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -48,7 +49,7 @@ class LinuxUserServiceManager(ServiceManager):
             "",
             "[Service]",
             "Type=simple",
-            f"ExecStart={shell_join(spec.command)}",
+            f"ExecStart=/bin/bash -lc {shlex.quote(shell_join(spec.command))}",
         ]
         if spec.working_dir:
             lines.append(f"WorkingDirectory={spec.working_dir}")
