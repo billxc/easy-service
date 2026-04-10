@@ -31,6 +31,12 @@ easy-service logs my-bot --follow   # tail -f style
 easy-service stop my-bot
 easy-service start my-bot
 
+# Disable auto-start on login (keeps the service installed)
+easy-service disable my-bot
+
+# Re-enable auto-start on login
+easy-service enable my-bot
+
 # Remove
 easy-service uninstall my-bot
 ```
@@ -46,6 +52,8 @@ easy-service start my-bot
 easy-service stop my-bot
 easy-service restart my-bot
 easy-service status my-bot
+easy-service disable my-bot                                         # prevent auto-start on login
+easy-service enable my-bot                                          # re-enable auto-start on login
 easy-service uninstall my-bot
 easy-service logs my-bot [-f/--follow]                              # view service stdout/stderr
 easy-service events my-bot [-f/--follow]                            # view launcher lifecycle events
@@ -153,6 +161,8 @@ manager = manager_for_platform()   # auto-detects macOS / Linux / Windows
 manager.install(spec)              # install + auto-start
 manager.status("my-bot")           # => ServiceStatus(installed=True, running=True, ...)
 manager.stop("my-bot")
+manager.disable("my-bot")          # prevent auto-start on login
+manager.enable("my-bot")           # re-enable auto-start on login
 manager.uninstall("my-bot")
 ```
 

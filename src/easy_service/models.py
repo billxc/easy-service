@@ -46,4 +46,5 @@ class ServiceStatus:
     installed: bool
     running: bool | None
     detail: str
+    enabled: bool | None = None
 

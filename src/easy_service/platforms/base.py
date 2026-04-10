@@ -39,6 +39,14 @@ class ServiceManager(ABC):
         """Return service status."""
 
     @abstractmethod
+    def disable(self, name: str) -> None:
+        """Disable auto-start on login without uninstalling."""
+
+    @abstractmethod
+    def enable(self, name: str) -> None:
+        """Enable auto-start on login."""
+
+    @abstractmethod
     def logs(self, name: str, follow: bool = False) -> None:
         """Print service stdout/stderr to stdout."""
 

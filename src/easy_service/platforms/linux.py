@@ -95,15 +95,31 @@ class LinuxUserServiceManager(ServiceManager):
         unit = self.unit_name(name)
         path = self.unit_path(name)
         if not path.exists():
-            return ServiceStatus(installed=False, running=None, detail="unit file not found")
+            return ServiceStatus(installed=False, running=None, enabled=None, detail="unit file not found")
 
+        enabled = self._is_enabled(name)
         result = self._run(["systemctl", "--user", "is-active", unit], check=False)
         state = (result.stdout or "").strip()
         return ServiceStatus(
             installed=True,
             running=state == "active",
+            enabled=enabled,
             detail=state or "unknown",
         )
+
+    def disable(self, name: str) -> None:
+        self._require_binary("systemctl")
+        self._require_installed(name)
+        self._run(["systemctl", "--user", "disable", self.unit_name(name)])
+
+    def enable(self, name: str) -> None:
+        self._require_binary("systemctl")
+        self._require_installed(name)
+        self._run(["systemctl", "--user", "enable", self.unit_name(name)])
+
+    def _is_enabled(self, name: str) -> bool:
+        result = self._run(["systemctl", "--user", "is-enabled", self.unit_name(name)], check=False)
+        return (result.stdout or "").strip() == "enabled"
 
     def logs(self, name: str, follow: bool = False) -> None:
         self._require_installed(name)

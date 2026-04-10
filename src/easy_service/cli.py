@@ -46,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     uninstall.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
     uninstall.add_argument("--clean", action="store_true", default=False, help="Remove all data including logs")
 
-    for name in ("start", "stop", "restart", "status"):
+    for name in ("start", "stop", "restart", "status", "disable", "enable"):
         cmd = sub.add_parser(name, help=f"{name.capitalize()} a service")
         cmd.add_argument("name")
         cmd.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
@@ -136,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
                 state = "running" if st.running else "stopped"
                 if st.running is None:
                     state = "unknown"
+                if st.enabled is False:
+                    state += " (disabled)"
                 print(f"{n}\t{state}")
             return 0
 
@@ -196,9 +198,21 @@ def main(argv: list[str] | None = None) -> int:
             state = "running" if status.running else "stopped"
             if status.running is None:
                 state = "unknown"
+            if status.enabled is False:
+                state += " (disabled)"
             print(f"{args.name}: {state}")
             if status.detail:
                 print(status.detail)
+            return 0
+
+        if args.command == "disable":
+            manager.disable(args.name)
+            print(f"disabled {args.name}")
+            return 0
+
+        if args.command == "enable":
+            manager.enable(args.name)
+            print(f"enabled {args.name}")
             return 0
 
         if args.command == "logs":

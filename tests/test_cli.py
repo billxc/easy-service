@@ -351,5 +351,110 @@ class ServiceSpecValidationTests(unittest.TestCase):
         self.assertEqual(spec.slug, "my-cool-bot")
 
 
+# ---------------------------------------------------------------------------
+# ServiceStatus enabled field
+# ---------------------------------------------------------------------------
+
+class ServiceStatusTests(unittest.TestCase):
+    def test_enabled_field_exists(self) -> None:
+        from easy_service.models import ServiceStatus
+        st = ServiceStatus(installed=True, running=True, enabled=True, detail="ok")
+        self.assertTrue(st.enabled)
+
+    def test_disabled_status(self) -> None:
+        from easy_service.models import ServiceStatus
+        st = ServiceStatus(installed=True, running=False, enabled=False, detail="stopped")
+        self.assertFalse(st.enabled)
+
+    def test_enabled_none_when_not_installed(self) -> None:
+        from easy_service.models import ServiceStatus
+        st = ServiceStatus(installed=False, running=None, enabled=None, detail="not found")
+        self.assertIsNone(st.enabled)
+
+
+# ---------------------------------------------------------------------------
+# Disable/Enable method existence tests
+# ---------------------------------------------------------------------------
+
+class DisableEnableMethodTests(unittest.TestCase):
+    """Verify all backends have disable/enable methods."""
+
+    def test_macos_has_disable(self) -> None:
+        mgr = MacOSLaunchAgentManager()
+        self.assertTrue(callable(getattr(mgr, "disable", None)))
+
+    def test_macos_has_enable(self) -> None:
+        mgr = MacOSLaunchAgentManager()
+        self.assertTrue(callable(getattr(mgr, "enable", None)))
+
+    def test_linux_has_disable(self) -> None:
+        mgr = LinuxUserServiceManager()
+        self.assertTrue(callable(getattr(mgr, "disable", None)))
+
+    def test_linux_has_enable(self) -> None:
+        mgr = LinuxUserServiceManager()
+        self.assertTrue(callable(getattr(mgr, "enable", None)))
+
+    def test_windows_has_disable(self) -> None:
+        mgr = WindowsTaskSchedulerManager()
+        self.assertTrue(callable(getattr(mgr, "disable", None)))
+
+    def test_windows_has_enable(self) -> None:
+        mgr = WindowsTaskSchedulerManager()
+        self.assertTrue(callable(getattr(mgr, "enable", None)))
+
+    def test_macos_disable_requires_installed(self) -> None:
+        mgr = MacOSLaunchAgentManager()
+        with self.assertRaises(RuntimeError):
+            mgr.disable("nonexistent-xyz-abc-999")
+
+    def test_macos_enable_requires_installed(self) -> None:
+        mgr = MacOSLaunchAgentManager()
+        with self.assertRaises(RuntimeError):
+            mgr.enable("nonexistent-xyz-abc-999")
+
+    def test_linux_disable_requires_installed(self) -> None:
+        mgr = LinuxUserServiceManager()
+        with self.assertRaises(RuntimeError):
+            mgr.disable("nonexistent-xyz-abc-999")
+
+    def test_linux_enable_requires_installed(self) -> None:
+        mgr = LinuxUserServiceManager()
+        with self.assertRaises(RuntimeError):
+            mgr.enable("nonexistent-xyz-abc-999")
+
+    def test_windows_disable_requires_installed(self) -> None:
+        mgr = WindowsTaskSchedulerManager()
+        with self.assertRaises(RuntimeError):
+            mgr.disable("nonexistent-xyz-abc-999")
+
+    def test_windows_enable_requires_installed(self) -> None:
+        mgr = WindowsTaskSchedulerManager()
+        with self.assertRaises(RuntimeError):
+            mgr.enable("nonexistent-xyz-abc-999")
+
+
+# ---------------------------------------------------------------------------
+# CLI disable/enable tests
+# ---------------------------------------------------------------------------
+
+class CLIDisableEnableTests(unittest.TestCase):
+    def test_disable_not_installed_returns_error(self) -> None:
+        stderr = io.StringIO()
+        argv = ["disable", "nonexistent-xyz-abc-999", "--platform", "macos"]
+        with redirect_stdout(io.StringIO()):
+            with patch("sys.stderr", stderr):
+                code = main(argv)
+        self.assertEqual(code, 1)
+
+    def test_enable_not_installed_returns_error(self) -> None:
+        stderr = io.StringIO()
+        argv = ["enable", "nonexistent-xyz-abc-999", "--platform", "macos"]
+        with redirect_stdout(io.StringIO()):
+            with patch("sys.stderr", stderr):
+                code = main(argv)
+        self.assertEqual(code, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -86,6 +86,8 @@ class MacOSLaunchAgentManager(ServiceManager):
         self._require_binary("launchctl")
         self._require_installed(name)
         self._run(["launchctl", "bootout", self._job(name)], check=False)
+        # Clear any disabled state so reinstalling starts fresh
+        self._run(["launchctl", "enable", self._job(name)], check=False)
         plist_path = self.plist_path(name)
         plist_path.unlink()
 
@@ -113,14 +115,37 @@ class MacOSLaunchAgentManager(ServiceManager):
     def status(self, name: str) -> ServiceStatus:
         plist_path = self.plist_path(name)
         if not plist_path.exists():
-            return ServiceStatus(installed=False, running=None, detail="plist not found")
+            return ServiceStatus(installed=False, running=None, enabled=None, detail="plist not found")
+        enabled = self._is_enabled(name)
         result = self._run(["launchctl", "print", self._job(name)], check=False)
         if result.returncode != 0:
-            return ServiceStatus(installed=True, running=False, detail="loaded but not running")
+            return ServiceStatus(installed=True, running=False, enabled=enabled, detail="not loaded")
         output = result.stdout or ""
         # launchctl print shows "state = running" or "state = not running"
         running = "state = running" in output.lower()
-        return ServiceStatus(installed=True, running=running, detail=output.strip() or "loaded")
+        return ServiceStatus(installed=True, running=running, enabled=enabled, detail=output.strip() or "loaded")
+
+    def disable(self, name: str) -> None:
+        self._require_binary("launchctl")
+        self._require_installed(name)
+        self._run(["launchctl", "disable", self._job(name)])
+
+    def enable(self, name: str) -> None:
+        self._require_binary("launchctl")
+        self._require_installed(name)
+        self._run(["launchctl", "enable", self._job(name)])
+
+    def _is_enabled(self, name: str) -> bool:
+        """Check if the service is enabled (not disabled via launchctl disable)."""
+        result = self._run(["launchctl", "print-disabled", self._domain()], check=False)
+        if result.returncode != 0:
+            return True  # assume enabled if we can't check
+        label = self.label(name)
+        for line in (result.stdout or "").splitlines():
+            # format: "dev.easy-service.xxx" => disabled
+            if f'"{label}"' in line and "=> disabled" in line:
+                return False
+        return True
 
     def logs(self, name: str, follow: bool = False) -> None:
         self._require_installed(name)

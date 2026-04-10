@@ -40,6 +40,8 @@ The public CLI surface is intentionally small:
 - `stop`
 - `restart`
 - `status`
+- `disable` — prevent auto-start on login without uninstalling
+- `enable` — re-enable auto-start on login
 - `logs` — view service stdout/stderr output
 - `events` — view launcher lifecycle events (start, crash, restart)
 - `upgrade` — re-sync service runtime after Python or easy-service upgrades (Windows only)

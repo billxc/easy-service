@@ -221,11 +221,34 @@ class WindowsTaskSchedulerManager(ServiceManager):
     def status(self, name: str) -> ServiceStatus:
         sp = self.spec_path(name)
         if not sp.exists():
-            return ServiceStatus(installed=False, running=None, detail="not installed")
+            return ServiceStatus(installed=False, running=None, enabled=None, detail="not installed")
+        enabled = self._is_enabled(name)
         pid = self._read_pid(name)
         if pid is not None:
-            return ServiceStatus(installed=True, running=True, detail=f"running (pid {pid})")
-        return ServiceStatus(installed=True, running=False, detail="stopped")
+            return ServiceStatus(installed=True, running=True, enabled=enabled, detail=f"running (pid {pid})")
+        return ServiceStatus(installed=True, running=False, enabled=enabled, detail="stopped")
+
+    def disable(self, name: str) -> None:
+        self._require_installed(name)
+        task_name = self.task_name(name)
+        self._run([self._schtasks(), "/change", "/tn", task_name, "/disable"])
+
+    def enable(self, name: str) -> None:
+        self._require_installed(name)
+        task_name = self.task_name(name)
+        self._run([self._schtasks(), "/change", "/tn", task_name, "/enable"])
+
+    def _is_enabled(self, name: str) -> bool:
+        """Check if the scheduled task is enabled."""
+        task_name = self.task_name(name)
+        result = self._run([self._schtasks(), "/query", "/tn", task_name, "/fo", "CSV", "/nh"], check=False)
+        if result.returncode != 0:
+            return True  # assume enabled if we can't check
+        import csv
+        for row in csv.reader((result.stdout or "").splitlines()):
+            if len(row) >= 3:
+                return row[2].strip() != "Disabled"
+        return True
 
     def _tail_file(self, path: Path, follow: bool) -> None:
         if not path.exists():
