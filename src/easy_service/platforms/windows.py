@@ -268,7 +268,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
         if follow:
             import time
             try:
-                with open(path, encoding="utf-8") as f:
+                with open(path, encoding="utf-8", errors="replace") as f:
                     sys.stdout.write(f.read())
                     sys.stdout.flush()
                     while True:
@@ -281,7 +281,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
             except KeyboardInterrupt:
                 pass
         else:
-            print(path.read_text(encoding="utf-8"), end="")
+            print(path.read_text(encoding="utf-8", errors="replace"), end="")
 
     def logs(self, name: str, follow: bool = False) -> None:
         self._tail_file(self.app_dir(name) / "output.log", follow)
