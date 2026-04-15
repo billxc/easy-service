@@ -47,11 +47,11 @@ class ServiceManager(ABC):
         """Enable auto-start on login."""
 
     @abstractmethod
-    def logs(self, name: str, follow: bool = False) -> None:
+    def logs(self, name: str, follow: bool = False, max_lines: int = 100) -> None:
         """Print service stdout/stderr to stdout."""
 
     @abstractmethod
-    def events(self, name: str, follow: bool = False) -> None:
+    def events(self, name: str, follow: bool = False, max_lines: int = 100) -> None:
         """Print launcher lifecycle events."""
 
     def restart(self, name: str) -> None:

@@ -261,7 +261,15 @@ class WindowsTaskSchedulerManager(ServiceManager):
                 return row[2].strip() != "Disabled"
         return True
 
-    def _tail_file(self, path: Path, follow: bool) -> None:
+    @staticmethod
+    def _tail_lines(path: Path, max_lines: int) -> list[str]:
+        """Read the last max_lines lines from a file. 0 means all."""
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+        if max_lines > 0 and len(lines) > max_lines:
+            return lines[-max_lines:]
+        return lines
+
+    def _tail_file(self, path: Path, follow: bool, max_lines: int = 100) -> None:
         if not path.exists():
             print(f"no logs yet: {path}")
             return
@@ -269,7 +277,10 @@ class WindowsTaskSchedulerManager(ServiceManager):
             import time
             try:
                 with open(path, encoding="utf-8", errors="replace") as f:
-                    sys.stdout.write(f.read())
+                    all_lines = f.readlines()
+                    if max_lines > 0 and len(all_lines) > max_lines:
+                        all_lines = all_lines[-max_lines:]
+                    sys.stdout.write("".join(all_lines))
                     sys.stdout.flush()
                     while True:
                         line = f.readline()
@@ -281,13 +292,14 @@ class WindowsTaskSchedulerManager(ServiceManager):
             except KeyboardInterrupt:
                 pass
         else:
-            print(path.read_text(encoding="utf-8", errors="replace"), end="")
+            lines = self._tail_lines(path, max_lines)
+            sys.stdout.write("".join(lines))
 
-    def logs(self, name: str, follow: bool = False) -> None:
-        self._tail_file(self.app_dir(name) / "output.log", follow)
+    def logs(self, name: str, follow: bool = False, max_lines: int = 100) -> None:
+        self._tail_file(self.app_dir(name) / "output.log", follow, max_lines)
 
-    def events(self, name: str, follow: bool = False) -> None:
-        self._tail_file(self.app_dir(name) / "launcher.log", follow)
+    def events(self, name: str, follow: bool = False, max_lines: int = 100) -> None:
+        self._tail_file(self.app_dir(name) / "launcher.log", follow, max_lines)
 
     def doctor(self) -> list[str]:
         lines = super().doctor()

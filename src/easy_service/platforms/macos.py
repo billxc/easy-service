@@ -147,7 +147,7 @@ class MacOSLaunchAgentManager(ServiceManager):
                 return False
         return True
 
-    def logs(self, name: str, follow: bool = False) -> None:
+    def logs(self, name: str, follow: bool = False, max_lines: int = 100) -> None:
         self._require_installed(name)
         slug = slugify(name)
         log_file = self.log_dir() / f"{slug}.log"
@@ -157,18 +157,26 @@ class MacOSLaunchAgentManager(ServiceManager):
             print(f"no logs yet for {name!r}")
             return
         if follow:
-            cmd = ["tail", "-f"] + [str(f) for f in existing]
+            tail_args = ["-f"]
+            if max_lines > 0:
+                tail_args = ["-n", str(max_lines), "-f"]
+            cmd = ["tail"] + tail_args + [str(f) for f in existing]
             subprocess.run(cmd)
         else:
             for f in existing:
                 print(f"# {f}")
-                content = f.read_text(encoding="utf-8")
+                content = f.read_text(encoding="utf-8", errors="replace")
                 if content:
-                    print(content, end="" if content.endswith("\n") else "\n")
+                    lines = content.splitlines(keepends=True)
+                    if max_lines > 0 and len(lines) > max_lines:
+                        lines = lines[-max_lines:]
+                    sys.stdout.write("".join(lines))
+                    if not content.endswith("\n"):
+                        sys.stdout.write("\n")
                 else:
                     print("(empty)")
 
-    def events(self, name: str, follow: bool = False) -> None:
+    def events(self, name: str, follow: bool = False, max_lines: int = 100) -> None:
         self._require_installed(name)
         cmd = ["log", "show", "--predicate",
                f'subsystem == "com.apple.launchd" AND composedMessage CONTAINS "{self.label(name)}"',
@@ -176,6 +184,7 @@ class MacOSLaunchAgentManager(ServiceManager):
         if follow:
             cmd = ["log", "stream", "--predicate",
                    f'subsystem == "com.apple.launchd" AND composedMessage CONTAINS "{self.label(name)}"']
+        # max_lines not supported for macOS log show/stream
         subprocess.run(cmd)
 
     def doctor(self) -> list[str]:

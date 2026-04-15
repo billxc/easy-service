@@ -121,19 +121,23 @@ class LinuxUserServiceManager(ServiceManager):
         result = self._run(["systemctl", "--user", "is-enabled", self.unit_name(name)], check=False)
         return (result.stdout or "").strip() == "enabled"
 
-    def logs(self, name: str, follow: bool = False) -> None:
+    def logs(self, name: str, follow: bool = False, max_lines: int = 100) -> None:
         self._require_installed(name)
         unit = self.unit_name(name)
         cmd = ["journalctl", "--user", "-u", unit, "--no-pager"]
+        if max_lines > 0:
+            cmd += ["-n", str(max_lines)]
         if follow:
             cmd.append("-f")
         subprocess.run(cmd)
 
-    def events(self, name: str, follow: bool = False) -> None:
+    def events(self, name: str, follow: bool = False, max_lines: int = 100) -> None:
         self._require_installed(name)
         unit = self.unit_name(name)
         cmd = ["journalctl", "--user", "-u", unit, "--no-pager",
                "--output", "short", "--grep", "systemd"]
+        if max_lines > 0:
+            cmd += ["-n", str(max_lines)]
         if follow:
             cmd.append("-f")
         subprocess.run(cmd)
