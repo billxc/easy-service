@@ -82,7 +82,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
 
     def _load_spec(self, name: str) -> ServiceSpec:
         """Read spec.json back into a ServiceSpec."""
-        data = json.loads(self.spec_path(name).read_text())
+        data = json.loads(self.spec_path(name).read_text(encoding="utf-8"))
         return ServiceSpec(
             name=data["name"],
             command=tuple(data["command"]),
@@ -129,7 +129,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
         artifacts = self.render(spec)
         for path, content in artifacts.items():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content)
+            path.write_text(content, encoding="utf-8")
         powershell = self._require_binary("powershell")
         self._run([powershell, "-NoProfile", "-Command",
                    self._registration_script(spec)])
@@ -194,7 +194,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
         if not pid_file.exists():
             return None
         try:
-            parts = pid_file.read_text().strip().split()
+            parts = pid_file.read_text(encoding="utf-8").strip().split()
             pid = int(parts[0])
             if len(parts) >= 2:
                 saved_time = parts[1]
@@ -223,10 +223,12 @@ class WindowsTaskSchedulerManager(ServiceManager):
         if not sp.exists():
             return ServiceStatus(installed=False, running=None, enabled=None, detail="not installed")
         enabled = self._is_enabled(name)
+        spec = self._load_spec(name)
+        cmd_str = " ".join(spec.command)
         pid = self._read_pid(name)
         if pid is not None:
-            return ServiceStatus(installed=True, running=True, enabled=enabled, detail=f"running (pid {pid})")
-        return ServiceStatus(installed=True, running=False, enabled=enabled, detail="stopped")
+            return ServiceStatus(installed=True, running=True, enabled=enabled, detail=f"running (pid {pid})\ncommand: {cmd_str}")
+        return ServiceStatus(installed=True, running=False, enabled=enabled, detail=f"stopped\ncommand: {cmd_str}")
 
     def disable(self, name: str) -> None:
         self._require_installed(name)
@@ -257,7 +259,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
         if follow:
             import time
             try:
-                with open(path) as f:
+                with open(path, encoding="utf-8") as f:
                     sys.stdout.write(f.read())
                     sys.stdout.flush()
                     while True:
@@ -270,7 +272,7 @@ class WindowsTaskSchedulerManager(ServiceManager):
             except KeyboardInterrupt:
                 pass
         else:
-            print(path.read_text(), end="")
+            print(path.read_text(encoding="utf-8"), end="")
 
     def logs(self, name: str, follow: bool = False) -> None:
         self._tail_file(self.app_dir(name) / "output.log", follow)
