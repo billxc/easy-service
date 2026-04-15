@@ -66,7 +66,7 @@ class LinuxUserServiceManager(ServiceManager):
         artifacts = self.render(spec)
         unit_path, content = next(iter(artifacts.items()))
         unit_path.parent.mkdir(parents=True, exist_ok=True)
-        unit_path.write_text(content)
+        unit_path.write_text(content, encoding="utf-8")
         self._run(["systemctl", "--user", "daemon-reload"])
         self._run(["systemctl", "--user", "enable", self.unit_name(spec.name)])
         if spec.auto_start:

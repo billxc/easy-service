@@ -76,7 +76,7 @@ def _create_job_object():
 
 
 def _write_pid(pid_path: Path) -> None:
-    pid_path.write_text(f"{os.getpid()} {_creation_time(os.getpid())}")
+    pid_path.write_text(f"{os.getpid()} {_creation_time(os.getpid())}", encoding="utf-8")
 
 
 def _creation_time(pid: int) -> str:
@@ -115,7 +115,7 @@ def launch(name: str, app_dir: Path) -> int:
         print(f"error: {spec_path} not found", file=sys.stderr)
         return 1
 
-    spec = json.loads(spec_path.read_text())
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
     command = spec["command"]
     working_dir = spec.get("working_dir")
     env_pairs = spec.get("env", {})
@@ -136,7 +136,7 @@ def launch(name: str, app_dir: Path) -> int:
     _write_pid(pid_path)
 
     def _log(msg: str) -> None:
-        with open(log_path, "a") as f:
+        with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
 
     backoff = 1
@@ -164,7 +164,7 @@ def launch(name: str, app_dir: Path) -> int:
         while True:
             start_time = time.monotonic()
             _log(f"starting child: {command} (shell={use_shell})")
-            output_file = open(output_path, "a")
+            output_file = open(output_path, "a", encoding="utf-8")
             try:
                 proc = subprocess.Popen(
                     command,

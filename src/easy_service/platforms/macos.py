@@ -77,7 +77,7 @@ class MacOSLaunchAgentManager(ServiceManager):
         self.log_dir().mkdir(parents=True, exist_ok=True)
         # Unload any previous version before overwriting
         self._run(["launchctl", "bootout", self._job(spec.name)], check=False)
-        plist_path.write_text(content)
+        plist_path.write_text(content, encoding="utf-8")
         self._run(["launchctl", "bootstrap", self._domain(), str(plist_path)])
         if spec.auto_start:
             self._run(["launchctl", "kickstart", "-k", self._job(spec.name)])
@@ -162,7 +162,7 @@ class MacOSLaunchAgentManager(ServiceManager):
         else:
             for f in existing:
                 print(f"# {f}")
-                content = f.read_text()
+                content = f.read_text(encoding="utf-8")
                 if content:
                     print(content, end="" if content.endswith("\n") else "\n")
                 else:
