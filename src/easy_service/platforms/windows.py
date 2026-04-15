@@ -126,6 +126,15 @@ class WindowsTaskSchedulerManager(ServiceManager):
         }
 
     def install(self, spec: ServiceSpec) -> None:
+        # Stop existing instance before overwriting
+        if self.spec_path(spec.name).exists():
+            pid = self._read_pid(spec.name)
+            if pid is not None:
+                self._run(
+                    [self._require_binary("taskkill"), "/T", "/F", "/PID", str(pid)],
+                    check=False,
+                )
+                self.pid_path(spec.name).unlink(missing_ok=True)
         artifacts = self.render(spec)
         for path, content in artifacts.items():
             path.parent.mkdir(parents=True, exist_ok=True)
