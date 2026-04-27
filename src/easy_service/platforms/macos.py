@@ -187,6 +187,21 @@ class MacOSLaunchAgentManager(ServiceManager):
         # max_lines not supported for macOS log show/stream
         subprocess.run(cmd)
 
+    def clean_logs(self, name: str) -> None:
+        self._require_installed(name)
+        slug = slugify(name)
+        log_dir = self.log_dir()
+        removed = []
+        for suffix in (".log", ".err"):
+            f = log_dir / f"{slug}{suffix}"
+            if f.exists():
+                f.unlink()
+                removed.append(f.name)
+        if removed:
+            print(f"removed: {', '.join(removed)}")
+        else:
+            print(f"no logs to clean for {name!r}")
+
     def doctor(self) -> list[str]:
         lines = super().doctor()
         plist_dir = self.plist_path("example").parent

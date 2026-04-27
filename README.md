@@ -39,6 +39,9 @@ easy-service enable my-bot
 
 # Remove
 easy-service uninstall my-bot
+
+# Clear log files
+easy-service clean-logs my-bot
 ```
 
 ## CLI
@@ -57,6 +60,7 @@ easy-service enable my-bot                                          # re-enable 
 easy-service uninstall my-bot
 easy-service logs my-bot [-f/--follow]                              # view service stdout/stderr
 easy-service events my-bot [-f/--follow]                            # view launcher lifecycle events
+easy-service clean-logs my-bot                                      # remove all log files for a service
 easy-service upgrade [my-bot]                                       # re-sync service runtime (Windows)
 easy-service --version                                              # show version
 ```
@@ -161,6 +165,7 @@ manager = manager_for_platform()   # auto-detects macOS / Linux / Windows
 manager.install(spec)              # install + auto-start
 manager.status("my-bot")           # => ServiceStatus(installed=True, running=True, ...)
 manager.stop("my-bot")
+manager.clean_logs("my-bot")       # remove all log files
 manager.disable("my-bot")          # prevent auto-start on login
 manager.enable("my-bot")           # re-enable auto-start on login
 manager.uninstall("my-bot")

@@ -456,5 +456,96 @@ class CLIDisableEnableTests(unittest.TestCase):
         self.assertEqual(code, 1)
 
 
+# ---------------------------------------------------------------------------
+# clean_logs tests
+# ---------------------------------------------------------------------------
+
+class CleanLogsMethodTests(unittest.TestCase):
+    """Verify all backends have clean_logs and guard against uninstalled."""
+
+    def test_macos_has_clean_logs(self) -> None:
+        mgr = MacOSLaunchAgentManager()
+        self.assertTrue(callable(getattr(mgr, "clean_logs", None)))
+
+    def test_linux_has_clean_logs(self) -> None:
+        mgr = LinuxUserServiceManager()
+        self.assertTrue(callable(getattr(mgr, "clean_logs", None)))
+
+    def test_windows_has_clean_logs(self) -> None:
+        mgr = WindowsTaskSchedulerManager()
+        self.assertTrue(callable(getattr(mgr, "clean_logs", None)))
+
+    def test_macos_clean_logs_requires_installed(self) -> None:
+        mgr = MacOSLaunchAgentManager()
+        with self.assertRaises(RuntimeError):
+            mgr.clean_logs("nonexistent-xyz-abc-999")
+
+    def test_linux_clean_logs_requires_installed(self) -> None:
+        mgr = LinuxUserServiceManager()
+        with self.assertRaises(RuntimeError):
+            mgr.clean_logs("nonexistent-xyz-abc-999")
+
+    def test_windows_clean_logs_requires_installed(self) -> None:
+        mgr = WindowsTaskSchedulerManager()
+        with self.assertRaises(RuntimeError):
+            mgr.clean_logs("nonexistent-xyz-abc-999")
+
+
+class MacOSCleanLogsTests(unittest.TestCase):
+    """Test macOS clean_logs with real temp files."""
+
+    def test_removes_log_and_err_files(self) -> None:
+        mgr = MacOSLaunchAgentManager()
+        slug = slugify("clean-test")
+        log_dir = mgr.log_dir()
+        log_file = log_dir / f"{slug}.log"
+        err_file = log_dir / f"{slug}.err"
+        plist_path = mgr.plist_path("clean-test")
+
+        # Set up: create fake plist and log files
+        plist_path.parent.mkdir(parents=True, exist_ok=True)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        plist_path.write_text("<plist/>", encoding="utf-8")
+        log_file.write_text("some log output\n", encoding="utf-8")
+        err_file.write_text("some error output\n", encoding="utf-8")
+
+        try:
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                mgr.clean_logs("clean-test")
+            self.assertFalse(log_file.exists())
+            self.assertFalse(err_file.exists())
+            self.assertIn("removed", stdout.getvalue())
+        finally:
+            plist_path.unlink(missing_ok=True)
+            log_file.unlink(missing_ok=True)
+            err_file.unlink(missing_ok=True)
+
+    def test_no_logs_message(self) -> None:
+        mgr = MacOSLaunchAgentManager()
+        plist_path = mgr.plist_path("clean-empty-test")
+
+        plist_path.parent.mkdir(parents=True, exist_ok=True)
+        plist_path.write_text("<plist/>", encoding="utf-8")
+
+        try:
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                mgr.clean_logs("clean-empty-test")
+            self.assertIn("no logs to clean", stdout.getvalue())
+        finally:
+            plist_path.unlink(missing_ok=True)
+
+
+class CLICleanLogsTests(unittest.TestCase):
+    def test_clean_logs_not_installed_returns_error(self) -> None:
+        stderr = io.StringIO()
+        argv = ["clean-logs", "nonexistent-xyz-abc-999", "--platform", "macos"]
+        with redirect_stdout(io.StringIO()):
+            with patch("sys.stderr", stderr):
+                code = main(argv)
+        self.assertEqual(code, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

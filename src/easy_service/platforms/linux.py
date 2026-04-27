@@ -142,6 +142,25 @@ class LinuxUserServiceManager(ServiceManager):
             cmd.append("-f")
         subprocess.run(cmd)
 
+    def clean_logs(self, name: str) -> None:
+        self._require_installed(name)
+        unit = self.unit_name(name)
+        self._require_binary("journalctl")
+        # journalctl vacuum does not support per-unit filtering.
+        # Rotate first so active logs are archived, then vacuum with 1s threshold.
+        print(f"note: systemd journal does not support per-unit log deletion")
+        print(f"vacuuming entire user journal (affects all services)...")
+        self._run(["journalctl", "--user", "--rotate"], check=False)
+        result = self._run(
+            ["journalctl", "--user", "--vacuum-time=1s"],
+            check=False,
+        )
+        if result.returncode == 0:
+            print("cleared user journal logs")
+        else:
+            detail = (result.stderr or result.stdout or "").strip()
+            print(f"warning: vacuum failed: {detail}")
+
     def doctor(self) -> list[str]:
         lines = super().doctor()
         unit_dir = self.unit_path("example").parent

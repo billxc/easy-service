@@ -67,6 +67,10 @@ def build_parser() -> argparse.ArgumentParser:
     events.add_argument("-f", "--follow", action="store_true", default=False, help="Follow event output")
     events.add_argument("-n", "--max-lines", type=int, default=100, help="Max lines to show (default: 100, 0 for unlimited)")
 
+    clean_logs = sub.add_parser("clean-logs", help="Remove all log files for a service")
+    clean_logs.add_argument("name")
+    clean_logs.add_argument("--platform", choices=["macos", "linux", "windows"], default=None)
+
     # Internal command used by the Windows launcher daemon
     launch = sub.add_parser("_launch")
     launch.add_argument("name")
@@ -223,6 +227,10 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "events":
             manager.events(args.name, follow=args.follow, max_lines=args.max_lines)
+            return 0
+
+        if args.command == "clean-logs":
+            manager.clean_logs(args.name)
             return 0
 
     except Exception as exc:

@@ -301,6 +301,24 @@ class WindowsTaskSchedulerManager(ServiceManager):
     def events(self, name: str, follow: bool = False, max_lines: int = 100) -> None:
         self._tail_file(self.app_dir(name) / "launcher.log", follow, max_lines)
 
+    def clean_logs(self, name: str) -> None:
+        self._require_installed(name)
+        if self._read_pid(name) is not None:
+            raise RuntimeError(
+                f"service {name!r} is running — stop it first with: easy-service stop {name}"
+            )
+        app = self.app_dir(name)
+        removed = []
+        for log_name in ("output.log", "launcher.log"):
+            f = app / log_name
+            if f.exists():
+                f.unlink()
+                removed.append(log_name)
+        if removed:
+            print(f"removed: {', '.join(removed)}")
+        else:
+            print(f"no logs to clean for {name!r}")
+
     def doctor(self) -> list[str]:
         lines = super().doctor()
         lines.append(f"app_dir={self.app_dir('example').parent}")

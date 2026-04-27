@@ -54,6 +54,10 @@ class ServiceManager(ABC):
     def events(self, name: str, follow: bool = False, max_lines: int = 100) -> None:
         """Print launcher lifecycle events."""
 
+    @abstractmethod
+    def clean_logs(self, name: str) -> None:
+        """Remove all log files for the service."""
+
     def restart(self, name: str) -> None:
         self.stop(name)
         self.start(name)
